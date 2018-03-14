@@ -26,7 +26,7 @@ void Init_Cluster(int node_num)
 			Cluster[i]->dup_count = 0;
 			Cluster[i]->total_access_count = 0;
 			Cluster[i]->speclative_read_access = 0;
-			Cluster[i]->write_access = 0;
+			Cluster[i]->degrade_access = 0;
 			Cluster[i]->read_access = 0;
 			Cluster[i]->parity_num = 0;
 			Cluster[i]->network = 0;
@@ -232,11 +232,10 @@ void Finish_time_SOE(int sp, int policy)
 	{
 		temp = global_storage[stripe_tbl[sp].parity[i]]->node_num;
 
-		Cluster[temp]->write_access++;
+//		Cluster[temp]->degrade_access++;
 
 //		queue = (Cluster[temp]->write_access - 1) % QUEUE_NUM;
 
-		if (sys_last_busy_time >= Cluster[temp]->queques[queue])
 		if (sys_last_busy_time >= Cluster[temp]->Last_Busy_Time)
 		{
 			Cluster[temp]->Last_Busy_Time = sys_last_busy_time + DATA_TRANSMISSION + WRITE_LATENCY;
@@ -255,7 +254,7 @@ void Finish_time_SOE(int sp, int policy)
 	{
 		temp = global_storage[soe.data_pblk[i].fp->p->pblk_num]->node_num;
 
-		Cluster[temp]->write_access++;
+//		Cluster[temp]->degrade_access++;
 
 //		queue = (Cluster[temp]->write_access - 1) % QUEUE_NUM;
 
@@ -411,7 +410,7 @@ void Init_a_stripe(struct stripe &s, int k, int m)
 }
 
 // /*return new stripe_num*/
-long long Placement(struct SOE soe, int policy)
+long long Placement(struct SOE soe, int policy, int recon)
 {
 	struct stripe s;
 
@@ -433,39 +432,15 @@ long long Placement(struct SOE soe, int policy)
 
 	if(policy == 0)
 	{
-		BA_RR(s.stripe_num, 1, policy);
+		BA_RR(s.stripe_num, 1, recon);
 	}
 	else if(policy == 1)
 	{
-		RA(s.stripe_num, policy);
+		RA(s.stripe_num, recon);
 	}
 	else if(policy == 2)
 	{
 		DA_RR(s.stripe_num, ec_m, policy);
-	}
-	else if(policy == 3)
-	{
-		DA_NO_RR(s.stripe_num, ec_m, policy);
-	}
-	else if(policy == 4)
-	{
-		DA_access_b(s.stripe_num, ec_m, policy);
-	}
-	else if(policy == 5)
-	{
-		DA_lbt_b(s.stripe_num, ec_m, policy);
-	}
-	else if(policy == 6)
-	{
-		DA_lbt_mix(s.stripe_num, ec_m, policy);
-	}
-	else if(policy == 7)
-	{
-		DA_sra_b(s.stripe_num, ec_m, policy);
-	}
-	else if(policy == 8)
-	{
-		P_balance(s.stripe_num, ec_m, policy);
 	}
 	else
 	{
@@ -502,12 +477,7 @@ long long Placement(struct SOE soe, int policy)
 				blk_mapping[soe.data_pblk[i].datablk] = soe.data_pblk[i].fp->p->pblk_num;
 				soe.data_pblk[i].fp->p->data_blk_num = soe.data_pblk[i].datablk;
 
-				W_Req_Tbl[policy][soe.data_pblk[i].Request_index].datablks.push_back(soe.data_pblk[i].fp->p->data_blk_num);
-//
-				for(int j = 0; j < soe.data_pblk[i].dup.size(); j++)
-				{
-					W_Req_Tbl[policy][soe.data_pblk[i].dup[j]].datablks.push_back(soe.data_pblk[i].fp->p->data_blk_num);
-				}
+				W_Req_Tbl[recon][soe.data_pblk[i].Request_index].datablks.push_back(soe.data_pblk[i].fp->p->data_blk_num);
 			}
 
 
@@ -730,14 +700,14 @@ int Min_Node_mix(std::set<int> t1, std::set<int> t2)
 	std::vector<int>::iterator s1;
 
 	int index = *(tmp.begin());
-	long long min = Cluster[index]->write_access + Cluster[index]->speclative_read_access;
+	long long min = Cluster[index]->degrade_access + Cluster[index]->speclative_read_access;
 
 	for(s1 = tmp.begin(); s1 != tmp.end(); s1++)
 	{
-		if(s1 != tmp.begin() && min > (Cluster[*s1]->write_access + Cluster[*s1]->speclative_read_access))
+		if(s1 != tmp.begin() && min > (Cluster[*s1]->degrade_access + Cluster[*s1]->speclative_read_access))
 		{
 			index = *s1;
-			min = Cluster[*s1]->write_access + Cluster[*s1]->speclative_read_access;;
+			min = Cluster[*s1]->degrade_access + Cluster[*s1]->speclative_read_access;;
 		}
 
 	}
@@ -792,7 +762,6 @@ void BA_RR(long long sp, int stride, int policy)
 
 			Cluster[soe.data_pblk[i].fp->p->node_num]->dup_count += soe.data_pblk[i].fp->hit;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->pblk_used++;
-			Cluster[soe.data_pblk[i].fp->p->node_num]->write_access++;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->speclative_read_access += soe.data_pblk[i].fp->hit + 1;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->total_access_count++;
 		}
@@ -834,7 +803,6 @@ void RA(long long sp, int policy)
 
 			Cluster[soe.data_pblk[i].fp->p->node_num]->dup_count += soe.data_pblk[i].fp->hit;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->pblk_used++;
-			Cluster[soe.data_pblk[i].fp->p->node_num]->write_access++;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->speclative_read_access += soe.data_pblk[i].fp->hit + 1;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->total_access_count++;
 
@@ -1033,7 +1001,6 @@ void DA_RR(long long sp, int stride, int policy)
 
 			Cluster[soe.data_pblk[i].fp->p->node_num]->dup_count += soe.data_pblk[i].fp->hit;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->pblk_used++;
-			Cluster[soe.data_pblk[i].fp->p->node_num]->write_access++;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->speclative_read_access += soe.data_pblk[i].fp->hit + 1;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->total_access_count++;
 
@@ -1206,7 +1173,6 @@ void DA_RR_new(long long sp, int stride, int policy)
 
 			Cluster[soe.data_pblk[i].fp->p->node_num]->dup_count += soe.data_pblk[i].fp->hit;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->pblk_used++;
-			Cluster[soe.data_pblk[i].fp->p->node_num]->write_access++;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->speclative_read_access += soe.data_pblk[i].fp->hit + 1;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->total_access_count++;
 
@@ -1398,7 +1364,6 @@ void DA_NO_RR(long long sp, int stride, int policy)
 
 			Cluster[soe.data_pblk[i].fp->p->node_num]->dup_count += soe.data_pblk[i].fp->hit;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->pblk_used++;
-			Cluster[soe.data_pblk[i].fp->p->node_num]->write_access++;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->speclative_read_access += soe.data_pblk[i].fp->hit + 1;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->total_access_count++;
 
@@ -1548,7 +1513,6 @@ void DA_access_b(long long sp, int stride, int policy)
 
 			Cluster[soe.data_pblk[i].fp->p->node_num]->dup_count += soe.data_pblk[i].fp->hit;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->pblk_used++;
-			Cluster[soe.data_pblk[i].fp->p->node_num]->write_access++;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->speclative_read_access += soe.data_pblk[i].fp->hit + 1;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->total_access_count++;
 
@@ -1681,7 +1645,6 @@ void DA_sra_b(long long sp, int stride, int policy)
 
 			Cluster[soe.data_pblk[i].fp->p->node_num]->dup_count += soe.data_pblk[i].fp->hit;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->pblk_used++;
-			Cluster[soe.data_pblk[i].fp->p->node_num]->write_access++;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->speclative_read_access += soe.data_pblk[i].fp->hit + 1;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->total_access_count++;
 
@@ -1836,7 +1799,6 @@ void DA_lbt_b(long long sp, int stride, int policy)
 
 			Cluster[soe.data_pblk[i].fp->p->node_num]->dup_count += soe.data_pblk[i].fp->hit;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->pblk_used++;
-			Cluster[soe.data_pblk[i].fp->p->node_num]->write_access++;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->speclative_read_access += soe.data_pblk[i].fp->hit + 1;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->total_access_count++;
 
@@ -1971,7 +1933,6 @@ void DA_lbt_mix(long long sp, int stride, int policy)
 
 			Cluster[soe.data_pblk[i].fp->p->node_num]->dup_count += soe.data_pblk[i].fp->hit;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->pblk_used++;
-			Cluster[soe.data_pblk[i].fp->p->node_num]->write_access++;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->speclative_read_access += soe.data_pblk[i].fp->hit + 1;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->total_access_count++;
 
@@ -2046,7 +2007,7 @@ void P_balance(long long sp, int stride, int policy)
 
 			Cluster[soe.data_pblk[i].fp->p->node_num]->dup_count += soe.data_pblk[i].fp->hit;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->pblk_used++;
-			Cluster[soe.data_pblk[i].fp->p->node_num]->write_access++;
+			Cluster[soe.data_pblk[i].fp->p->node_num]->degrade_access++;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->speclative_read_access += soe.data_pblk[i].fp->hit + 1;
 			Cluster[soe.data_pblk[i].fp->p->node_num]->total_access_count++;
 
@@ -2086,7 +2047,7 @@ void Print_Cluster_Time()
 	printf("---------------------Printing out each node------------------------\n");
 	for (int i = 0; i < ec_node; ++i)
 	{
-		printf("Cluster[%2d] dup: %3lld [LST: %8lld] [pblk_Used: %4lld Parity: %4lld] [T_A: %4lld] [W_A: %4lld] [R_A: %4lld] [SRA: %4lld]\n", i, Cluster[i]->dup_count, Cluster[i]->Last_Busy_Time, Cluster[i]->pblk_used, Cluster[i]->parity_num, Cluster[i]->total_access_count, Cluster[i]->write_access, Cluster[i]->read_access, Cluster[i]->speclative_read_access);
+		printf("Cluster[%2d] [LST: %8lld] [pblk_Used: %4lld Parity: %4lld] [T_A: %4lld] [Degraded_A: %4lld] [R_A: %4lld] [SRA: %4lld]\n", i, Cluster[i]->Last_Busy_Time, Cluster[i]->pblk_used, Cluster[i]->parity_num, Cluster[i]->total_access_count, Cluster[i]->degrade_access, Cluster[i]->read_access, Cluster[i]->speclative_read_access);
 	}
 
 	printf("\n");
@@ -2178,7 +2139,6 @@ void Encode_a_stripe(int s, int m)
 		global_storage[stripe_tbl[s].parity[i]]->parity = 1;
 		global_storage[stripe_tbl[s].parity[i]]->stripe_num = s;
 		Cluster[global_storage[stripe_tbl[s].parity[i]]->node_num]->pblk_used++;
-		Cluster[global_storage[stripe_tbl[s].parity[i]]->node_num]->write_access++;
 		Cluster[global_storage[stripe_tbl[s].parity[i]]->node_num]->total_access_count++;
 		Cluster[global_storage[stripe_tbl[s].parity[i]]->node_num]->parity_num++;
 	}

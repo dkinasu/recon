@@ -31,7 +31,9 @@ long long cache_size = 0;
 long long First_Arrive_T = 0;
 //FIU trace
 int trace = 1;
-int Policy = 1;
+int P_Policy = 1;
+int degraded = 0;
+int Scheduler_num = 0;
 
 std::vector<long long>CDF;
 
@@ -154,6 +156,8 @@ long long tmp = 0;
 long long read_blk_num = 0;
 long long last_datablk_by_fp = -1;//record last found fp in read. -1 means starting.
 
+long long recon_stripe_count = 0;
+long long total_l = 0;
 std::vector<struct Result> Final;
 
 

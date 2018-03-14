@@ -52,9 +52,14 @@ void Output_Statictics(int trace_start, int trace_end, std::vector< std::vector<
 
     char result_buf[4096];
 
+	sprintf(result_buf,"%-8s %-8s %-8s %-8s %-8s \n", "index", "lbt_base", "lbt_recon", "G_access-base", "G_access_recon");
+	result_buf[strlen(result_buf)] = '\0';
+	fwrite(result_buf, 1, strlen(result_buf), R_out);
+
+
     for(int i = 0; i < load_balancer_lbt[0].size(); i++)
     {
-    	sprintf(result_buf,"%5d %-8.3f %-8.3f    %-8.3f %-8.3f \n", i, load_balancer_lbt[0][i], load_balancer_lbt[1][i], load_balancer_access[0][i], load_balancer_access[1][i]);
+    	sprintf(result_buf,"%-8d %-8.3f %-8.3f %-8.3f %-8.3f \n", i, load_balancer_lbt[0][i], load_balancer_lbt[1][i], load_balancer_access[0][i], load_balancer_access[1][i]);
     	result_buf[strlen(result_buf)] = '\0';
     	fwrite(result_buf, 1, strlen(result_buf), R_out);
     }
@@ -72,7 +77,26 @@ void Output_Statictics(int trace_start, int trace_end, std::vector< std::vector<
     result_buf[strlen(result_buf)] = '\0';
     fwrite(result_buf, 1, strlen(result_buf), R_out);
 
+    if(degraded == 0)
+    {
 
+		sprintf(result_buf, "-------------Read_table[Printout]---------\n");
+		result_buf[strlen(result_buf)] = '\0';
+		fwrite(result_buf, 1, strlen(result_buf), R_out);
+
+		sprintf(result_buf, "%-8s %-8s %-8s %-8s %-8s %-8s %-8s \n", "Index", "ID", "Read_size", "L_base", "L_recon", "G_base", "G_recon");
+		result_buf[strlen(result_buf)] = '\0';
+		fwrite(result_buf, 1, strlen(result_buf), R_out);
+
+		for(int i = 0; i < R_Req_Tbl[0].size(); i++)
+		{
+			sprintf(result_buf,"%-8d %-8s %-8lu %-8lld %-8lld %-8.3f %-8.3f \n", i, R_Req_Tbl[0][i].RequestID, R_Req_Tbl[0][i].datablks.size(), R_Req_Tbl[0][i].Lasting_time, R_Req_Tbl[1][i].Lasting_time, R_Req_Tbl[0][i].G_value, R_Req_Tbl[1][i].G_value);
+			result_buf[strlen(result_buf)] = '\0';
+			fwrite(result_buf, 1, strlen(result_buf), R_out);
+
+		}
+
+    }
 //    if(degraded == 0)
 //    {
 //		sprintf(result_buf,"\n----------Read Profiling!--------------------\n");
@@ -207,16 +231,10 @@ int main(int argc, char** argv)
 
     char **default_setting;
     Create_Default_Setting(&default_setting);
-    Argv_Parse(10, default_setting, file_prefix, file_suffix);
-    Policy = atoi(default_setting[9]);
-
+    Argv_Parse(8, default_setting, file_prefix, file_suffix);
 
 //	Argv_Parse(argc, argv, file_prefix, file_suffix);
-//	Policy = atoi(argv[9]);
-//
-    int degraded = atoi(argv[11]);
-
-    cout << "Policy is: " << Policy << "  degraded is: " << degraded << "  IO queues are:  "<< QUEUE_NUM <<endl;
+//	Policy = atoi(argv[6]);
 
     if(ec_node < NODE_NUM)
     {
@@ -228,36 +246,28 @@ int main(int argc, char** argv)
     struct Result t;
 
     std::vector< std::vector<long long> >cdf;
-    R_trace_CDF.resize(6);
-    W_trace_CDF.resize(6);
-    load_balancer_lbt.resize(2);
-    load_balancer_access.resize(2);
+    load_balancer_lbt.resize(Scheduler_num);
+    load_balancer_access.resize(Scheduler_num);
 
-    R_Req_Tbl.resize(Policy);
-    W_Req_Tbl.resize(Policy);
+    R_Req_Tbl.resize(Scheduler_num);
+    W_Req_Tbl.resize(Scheduler_num);
 
-
-    Policy = 0;
-
-    int Scheduler = 2;
-    for(int i = 0; i < Scheduler; i++)
+    for(int i = 0; i < Scheduler_num; i++)
     {
     	Init(ec_node, 0);
 
     	if(degraded == 0)
     	{
-    		t = Process(files, trace_start, trace_end, &T_line, ERASURE, Policy, 200, degraded, i);
-
+    		t = Process(files, trace_start, trace_end, &T_line, ERASURE, P_Policy, 200, degraded, i);
     	}
-    	else
+    	else //Degraded
     	{
     		long long latency_sum = 0;
     		long long G_sum = 0;
     		for(int j = 0; j < ec_node; j++)
     		{
-    			t = Process(files, trace_start, trace_end, &T_line, ERASURE, Policy, j, degraded, i);
-    			latency_sum += t.total_latency;
-    			G_sum += t.value[RAW_TRACE];
+    			Process(files, trace_start, trace_end, &T_line, ERASURE, P_Policy, j, degraded, i);
+    			latency_sum += total_l;
     		}
 
     		t.total_latency = latency_sum / ec_node;
@@ -268,12 +278,10 @@ int main(int argc, char** argv)
     	cdf.push_back(CDF);
     	Final.push_back(t);
     	Reset_all(ec_node, 0);
-    	R_Req_Tbl.clear();
-    	R_Req_Tbl.resize(1);
+    	total_l = 0;
+//    	R_Req_Tbl.clear();
+//    	R_Req_Tbl.resize(1);
     }
-    
-//	CDF_calculation(W_trace_CDF, WRITE);
-//	CDF_calculation(R_trace_CDF, READ);
 
     Output_Statictics(trace_start, trace_end, cdf, degraded, ec_node, ec_k);
 

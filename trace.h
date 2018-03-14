@@ -62,7 +62,9 @@ extern char ** files;
 extern int trace_start; 
 extern int trace_end;  
 extern int ec_node;
-extern int Policy;
+extern int P_Policy;
+extern int degraded;
+extern int Scheduler_num;
 //FIU trace
 extern int trace;
 extern long long max_fp_num;
@@ -162,6 +164,7 @@ struct Request
 	std::set<int >remain;//contain the possible node index
 	std::vector<long long>datablks;
 	std::map<long long, long long>arrive_times;
+	int recon;
 };
 
 

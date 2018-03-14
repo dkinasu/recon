@@ -70,8 +70,8 @@ extern std::vector<struct Result> Final;
 
 struct Result Process(char **files, int trace_start, int trace_end, struct traceline *T_line, int baseline, int policy, int iteratimes, int degraded, int recon);
 void Write_Process(struct traceline *T_line, int baseline, int policy);
-void Read_by_FP(struct traceline *T_line, int baseline, int recon);
-void Read_by_lpblk(struct traceline *T_line, int ec);
+void Read_first_by_FP(struct traceline *T_line, int baseline, int recon);
+void Read_by_lpblk(struct traceline *T_line, int ec, int recon);
 void Read_Table(std::vector<struct Read_request> &Read_trace);
 void Delete_Process(struct traceline *T_line, int baseline);
 int Request(struct traceline *T_line, int ec, int recon);
@@ -88,12 +88,13 @@ void Print_set(set<int> &f);
 
 void Process_ReadTrace(std::vector<struct Read_request> &Read_trace, std::vector<struct Request> &W_Req_Tbl, int tracetype, struct Result &res, int iteratimes);
 void Cal_CDF(float &value);
-void Cal_total_latency();
-void CDF_calculation(vector<long long> &array, int write);
-float Calculate_G(long long Count_RIO, int policy);
+void Cal_total_statistics();
+void RW_CDF_calculation(vector<long long> &array, int write);
+float Calculate_G_access_per_request(long long Count_RIO, int policy, int recon);
+void Calculate_lasting_T_per_request(long long Count_RIO, int policy);
 
 void Schedule_request(long long Count_RIO, int policy);
-void Deal_last_request(int Count_RIO, int policy);
+void Deal_last_request(int Count_RIO, int policy, int recon);
 // define 6 situations of write
 extern long long w_case_1;
 extern long long w_case_2;
@@ -114,6 +115,8 @@ extern long long tmp;
 extern long long read_blk_num;
 //char *hex_to_binary(char *src, size_t src_size);
 
+extern long long recon_stripe_count;
+extern long long total_l;
 
 #endif /* PROCESS_H */
 

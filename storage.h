@@ -56,7 +56,7 @@ struct Node
 	int failed;
 	long long dup_count; //how many duplicates it saves
 	long long speclative_read_access;
-	long long write_access;
+	long long degrade_access;
 	long long read_access;
 	long long total_access_count;
 	long long parity_num;
@@ -175,7 +175,7 @@ struct stripe
 void Init_a_stripe(struct stripe &s, int k, int m);
 void Encode_a_stripe(int stripe_num, int m);
 // long Assign_parity(int k);
-long long Placement(struct SOE soe, int policy);
+long long Placement(struct SOE soe, int policy, int recon);
 void Print_stripe(long stripe_num);
 void Reset_stripe_tbl();
 void Print_stripe_tbl();

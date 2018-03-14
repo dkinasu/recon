@@ -60,92 +60,28 @@ float Sum(std::vector<struct Read_request> ReadTrace)
 	return t/ReadTrace.size();
 }
 
-void Write_Process_no_cal(struct traceline *T_line, int ec, int policy)
+void Write_Process_no_Dedup(struct traceline *T_line, int ec, int policy, int recon)
 {
 	int unique = 0;
 	long long last_trace_time = 0;
 
-
 	struct fp_node *fp = NULL;
 
-	sys_last_busy_time += SHA1_COST;
+	/*no dedup*/
+//	sys_last_busy_time += SHA1_COST;
 
-	fp = Find_fp(T_line->Sha1);
-	fp_search_count++;
-
-	if (fp != NULL) //duplicates
-	{
-		w_case_3++;
-//		printf("FP hit![%lld]!\n", w_case_3);
-		total_fp_hit++;
-		fp->hit++;
-
-		unique = 0;
-
-
-		T_line->Finish_Time = sys_last_busy_time + ACK_TIME;
-
-		if(T_line->Finish_Time > W_Req_Tbl[policy][T_line->Request_index].Finish_time)
-		{
-			W_Req_Tbl[policy][T_line->Request_index].Finish_time = T_line->Finish_Time;
-			W_Req_Tbl[policy][T_line->Request_index].Lasting_time = W_Req_Tbl[policy][T_line->Request_index].Finish_time - W_Req_Tbl[policy][T_line->Request_index].Arrive_time;
-			W_Req_Tbl[policy][T_line->Request_index].straggler = T_line->trace_num;
-		}
-
-
-		T_line->fp = fp;
-
-		if (T_line->fp->p == NULL)
-		{
-			Search_fp_in_SOE(T_line);
-		}
-		else
-		{
-			Cluster[T_line->fp->p->node_num]->dup_count++;
-			Cluster[T_line->fp->p->node_num]->speclative_read_access += 1;
-
-			for(int w = 0; w < QUEUE_NUM; w++)
-			{
-				std::set<int>::iterator it;
-				it = W_Req_Tbl[policy][T_line->Request_index].remain.find(T_line->fp->p->node_num + w*ec_node);
-
-				if(it != W_Req_Tbl[policy][T_line->Request_index].remain.end())
-				{
-					W_Req_Tbl[policy][T_line->Request_index].remain.erase(it);
-					break;
-				}
-			}
-
-			W_Req_Tbl[policy][T_line->Request_index].datablks.push_back(T_line->fp->p->data_blk_num);
-
-			W_Req_Tbl[policy][T_line->Request_index].used_nodes.insert(T_line->fp->p->node_num);
-			if(W_Req_Tbl[policy][T_line->Request_index].used_nodes.size() == ec_k)
-				W_Req_Tbl[policy][T_line->Request_index].used_nodes.clear();
-		}
-
-	}
-	else// new fp
 	{
 //		printf("FP [MISS]!\n");
 		unique = 1;
 		T_line->datablk = datablk_serial;
 		datablk_serial++;
 		fp = Init_fp_node(T_line);
-		Add_fp(fp);
+//		Add_fp(fp);
 		T_line->fp = fp;
 	}
 
-	//check cache.
 
-	sys_last_busy_time += ACCESS_CACHE;
-
-	if(Routine_N_cache(T_line->fp))
-	{
-		N_cache_hit++;
-		printf("line[%4lld]: cache hit[%lld]\n", total_line, N_cache_hit);
-		// printf("line:[%lld] RequestID: %s duplicated! Last_time[%lld]\n", total_line, T_line->RequestID,  T_line->Finish_Time - T_line->Arrive_Time);
-	}
-	else
+	/*No access cache*/
 	{
 		N_cache_miss++;
 //		printf("line[%4lld]: cache miss[%4lld]\n", total_line, N_cache_miss);
@@ -162,11 +98,11 @@ void Write_Process_no_cal(struct traceline *T_line, int ec, int policy)
 
 				T_line->Finish_Time = sys_last_busy_time + ACK_TIME;
 
-				if(T_line->Finish_Time > W_Req_Tbl[policy][T_line->Request_index].Finish_time)
+				if(T_line->Finish_Time > W_Req_Tbl[recon][T_line->Request_index].Finish_time)
 				{
-					W_Req_Tbl[policy][T_line->Request_index].Finish_time = T_line->Finish_Time;
-					W_Req_Tbl[policy][T_line->Request_index].Lasting_time = W_Req_Tbl[policy][T_line->Request_index].Finish_time - W_Req_Tbl[policy][T_line->Request_index].Arrive_time;
-					W_Req_Tbl[policy][T_line->Request_index].straggler = T_line->trace_num;
+					W_Req_Tbl[recon][T_line->Request_index].Finish_time = T_line->Finish_Time;
+					W_Req_Tbl[recon][T_line->Request_index].Lasting_time = W_Req_Tbl[recon][T_line->Request_index].Finish_time - W_Req_Tbl[recon][T_line->Request_index].Arrive_time;
+					W_Req_Tbl[recon][T_line->Request_index].straggler = T_line->trace_num;
 				}
 
 				//remove timeover restriction
@@ -187,8 +123,8 @@ void Write_Process_no_cal(struct traceline *T_line, int ec, int policy)
 //				printf("SOE is full! Starting Placement.\n");
 			    sys_last_busy_time += ENCODE_COST;
 
-			   	int s_p = Placement(soe, policy);
-//			   	Finish_time_SOE(s_p, policy);
+			   	int s_p = Placement(soe, policy, recon);
+			   	Finish_time_SOE(s_p, recon);
 //			   	Print_SOE();
 			   	Reset_SOE(ec_k);
 			}
@@ -209,175 +145,175 @@ void Write_Process_no_cal(struct traceline *T_line, int ec, int policy)
 
 
 // Process Write Request: 6 cases
-void Write_Process(struct traceline *T_line, int ec, int policy)
-{
-	int unique = 0;
-	long long last_trace_time = 0;
-
-
-	struct fp_node *fp = NULL;
-
-	sys_last_busy_time += SHA1_COST;
-
-	fp = Find_fp(T_line->Sha1);
-	fp_search_count++;
-
-	if (fp != NULL) //duplicates
-	{
-		w_case_3++;
-//		printf("FP hit![%lld]!\n", w_case_3);
-		total_fp_hit++;
-		fp->hit++;
-
-		unique = 0;
-
-
-		T_line->Finish_Time = sys_last_busy_time + ACK_TIME;
-
-		if(T_line->Finish_Time > W_Req_Tbl[policy][T_line->Request_index].Finish_time)
-		{
-			W_Req_Tbl[policy][T_line->Request_index].Finish_time = T_line->Finish_Time;
-			W_Req_Tbl[policy][T_line->Request_index].Lasting_time = W_Req_Tbl[policy][T_line->Request_index].Finish_time - W_Req_Tbl[policy][T_line->Request_index].Arrive_time;
-			W_Req_Tbl[policy][T_line->Request_index].straggler = T_line->trace_num;
-		}
-
-
-		T_line->fp = fp;
-
-		if (T_line->fp->p == NULL)
-		{
-			Search_fp_in_SOE(T_line);
-		}
-		else
-		{
-			Cluster[T_line->fp->p->node_num]->dup_count++;
-			Cluster[T_line->fp->p->node_num]->speclative_read_access += 1;
-
-			for(int w = 0; w < QUEUE_NUM; w++)
-			{
-				std::set<int>::iterator it;
-				it = W_Req_Tbl[policy][T_line->Request_index].remain.find(T_line->fp->p->node_num + w*ec_node);
-
-				if(it != W_Req_Tbl[policy][T_line->Request_index].remain.end())
-				{
-					W_Req_Tbl[policy][T_line->Request_index].remain.erase(it);
-					break;
-				}
-			}
-
-			W_Req_Tbl[policy][T_line->Request_index].datablks.push_back(T_line->fp->p->data_blk_num);
-
-			W_Req_Tbl[policy][T_line->Request_index].used_nodes.insert(T_line->fp->p->node_num);
-			if(W_Req_Tbl[policy][T_line->Request_index].used_nodes.size() == ec_k)
-				W_Req_Tbl[policy][T_line->Request_index].used_nodes.clear();
-		}
-
-	}
-	else// new fp
-	{
-//		printf("FP [MISS]!\n");
-		unique = 1;
-		T_line->datablk = datablk_serial;
-		datablk_serial++;
-		fp = Init_fp_node(T_line);
-		Add_fp(fp);
-		T_line->fp = fp;
-	}
-
-	//check cache.
-
-	sys_last_busy_time += ACCESS_CACHE;
-	
-	if(Routine_N_cache(T_line->fp))
-	{
-		N_cache_hit++;
-		printf("line[%4lld]: cache hit[%lld]\n", total_line, N_cache_hit);
-		// printf("line:[%lld] RequestID: %s duplicated! Last_time[%lld]\n", total_line, T_line->RequestID,  T_line->Finish_Time - T_line->Arrive_Time);
-	}
-	else
-	{
-		N_cache_miss++;
-//		printf("line[%4lld]: cache miss[%4lld]\n", total_line, N_cache_miss);
-		
-		if (ec == 1)
-		{
-			if(unique == 1)//new pblk
-			{
-
-				if (soe.full == 0)
-				{
-					tmp = T_line->Arrive_Time;
-				}
-				
-				T_line->Finish_Time = sys_last_busy_time + ACK_TIME;
-
-				if(T_line->Finish_Time > W_Req_Tbl[policy][T_line->Request_index].Finish_time)
-				{
-					W_Req_Tbl[policy][T_line->Request_index].Finish_time = T_line->Finish_Time;
-					W_Req_Tbl[policy][T_line->Request_index].Lasting_time = W_Req_Tbl[policy][T_line->Request_index].Finish_time - W_Req_Tbl[policy][T_line->Request_index].Arrive_time;
-					W_Req_Tbl[policy][T_line->Request_index].straggler = T_line->trace_num;
-				}
-
-				//remove timeover restriction
-				if(T_line->Arrive_Time > (tmp + PLACEMENT_THRESHOLD))
-				{
-					;
-				}
-
-//				printf("Push SOE\n");
-				Push_SOE(*T_line);
-				unique = 0;
-
-			}
-
-
-			if (Is_SOE_full(ec_k))//encoding
-			{
-//				printf("SOE is full! Starting Placement.\n");
-			    sys_last_busy_time += ENCODE_COST;
-			    
-			   	int s_p = Placement(soe, policy);
-			   	Finish_time_SOE(s_p, policy);
-//			   	Print_SOE();
-			   	Reset_SOE(ec_k);
-			}
-
-			 
-			
-		}
-		else if(ec == 0)//no Erasure coding
-		{
-
-//			//regardless of duplicates or not, go the the node and write.
-//			CurNode = global_storage[T_line->fp->p->pblk_num]->node_num;
+//void Write_Process(struct traceline *T_line, int ec, int policy)
+//{
+//	int unique = 0;
+//	long long last_trace_time = 0;
 //
-//			if (unique == 1)//new pblk
+//
+//	struct fp_node *fp = NULL;
+//
+//	sys_last_busy_time += SHA1_COST;
+//
+//	fp = Find_fp(T_line->Sha1);
+//	fp_search_count++;
+//
+//	if (fp != NULL) //duplicates
+//	{
+//		w_case_3++;
+////		printf("FP hit![%lld]!\n", w_case_3);
+//		total_fp_hit++;
+//		fp->hit++;
+//
+//		unique = 0;
+//
+//
+//		T_line->Finish_Time = sys_last_busy_time + ACK_TIME;
+//
+//		if(T_line->Finish_Time > W_Req_Tbl[policy][T_line->Request_index].Finish_time)
+//		{
+//			W_Req_Tbl[policy][T_line->Request_index].Finish_time = T_line->Finish_Time;
+//			W_Req_Tbl[policy][T_line->Request_index].Lasting_time = W_Req_Tbl[policy][T_line->Request_index].Finish_time - W_Req_Tbl[policy][T_line->Request_index].Arrive_time;
+//			W_Req_Tbl[policy][T_line->Request_index].straggler = T_line->trace_num;
+//		}
+//
+//
+//		T_line->fp = fp;
+//
+//		if (T_line->fp->p == NULL)
+//		{
+//			Search_fp_in_SOE(T_line);
+//		}
+//		else
+//		{
+//			Cluster[T_line->fp->p->node_num]->dup_count++;
+//			Cluster[T_line->fp->p->node_num]->speclative_read_access += 1;
+//
+//			for(int w = 0; w < QUEUE_NUM; w++)
 //			{
-//				if (sys_last_busy_time >= Cluster[CurNode]->Last_Busy_Time)
+//				std::set<int>::iterator it;
+//				it = W_Req_Tbl[policy][T_line->Request_index].remain.find(T_line->fp->p->node_num + w*ec_node);
+//
+//				if(it != W_Req_Tbl[policy][T_line->Request_index].remain.end())
 //				{
-//						Cluster[CurNode]->Last_Busy_Time = sys_last_busy_time + WRITE_LATENCY + DATA_TRANSMISSION;
+//					W_Req_Tbl[policy][T_line->Request_index].remain.erase(it);
+//					break;
 //				}
-//				else
+//			}
+//
+//			W_Req_Tbl[policy][T_line->Request_index].datablks.push_back(T_line->fp->p->data_blk_num);
+//
+//			W_Req_Tbl[policy][T_line->Request_index].used_nodes.insert(T_line->fp->p->node_num);
+//			if(W_Req_Tbl[policy][T_line->Request_index].used_nodes.size() == ec_k)
+//				W_Req_Tbl[policy][T_line->Request_index].used_nodes.clear();
+//		}
+//
+//	}
+//	else// new fp
+//	{
+////		printf("FP [MISS]!\n");
+//		unique = 1;
+//		T_line->datablk = datablk_serial;
+//		datablk_serial++;
+//		fp = Init_fp_node(T_line);
+//		Add_fp(fp);
+//		T_line->fp = fp;
+//	}
+//
+//	//check cache.
+//
+//	sys_last_busy_time += ACCESS_CACHE;
+//
+//	if(Routine_N_cache(T_line->fp))
+//	{
+//		N_cache_hit++;
+//		printf("line[%4lld]: cache hit[%lld]\n", total_line, N_cache_hit);
+//		// printf("line:[%lld] RequestID: %s duplicated! Last_time[%lld]\n", total_line, T_line->RequestID,  T_line->Finish_Time - T_line->Arrive_Time);
+//	}
+//	else
+//	{
+//		N_cache_miss++;
+////		printf("line[%4lld]: cache miss[%4lld]\n", total_line, N_cache_miss);
+//
+//		if (ec == 1)
+//		{
+//			if(unique == 1)//new pblk
+//			{
+//
+//				if (soe.full == 0)
 //				{
-//						Cluster[CurNode]->Last_Busy_Time += WRITE_LATENCY + DATA_TRANSMISSION;
+//					tmp = T_line->Arrive_Time;
 //				}
 //
-//				T_line->Finish_Time = Cluster[CurNode]->Last_Busy_Time;
+//				T_line->Finish_Time = sys_last_busy_time + ACK_TIME;
+//
+//				if(T_line->Finish_Time > W_Req_Tbl[policy][T_line->Request_index].Finish_time)
+//				{
+//					W_Req_Tbl[policy][T_line->Request_index].Finish_time = T_line->Finish_Time;
+//					W_Req_Tbl[policy][T_line->Request_index].Lasting_time = W_Req_Tbl[policy][T_line->Request_index].Finish_time - W_Req_Tbl[policy][T_line->Request_index].Arrive_time;
+//					W_Req_Tbl[policy][T_line->Request_index].straggler = T_line->trace_num;
+//				}
+//
+//				//remove timeover restriction
+//				if(T_line->Arrive_Time > (tmp + PLACEMENT_THRESHOLD))
+//				{
+//					;
+//				}
+//
+////				printf("Push SOE\n");
+//				Push_SOE(*T_line);
+//				unique = 0;
+//
 //			}
-//			else//duplicates & cache miss: write into cache instead of swap.
+//
+//
+//			if (Is_SOE_full(ec_k))//encoding
 //			{
-//				//get into cache.
-//				T_line->Finish_Time = sys_last_busy_time;
+////				printf("SOE is full! Starting Placement.\n");
+//			    sys_last_busy_time += ENCODE_COST;
+//
+//			   	int s_p = Placement(soe, policy);
+//			   	Finish_time_SOE(s_p, policy);
+////			   	Print_SOE();
+//			   	Reset_SOE(ec_k);
 //			}
-		}
-
-	}
-
-	
-
-	// printf("-----------------------------------------------------------\n");	
-
-}
+//
+//
+//
+//		}
+//		else if(ec == 0)//no Erasure coding
+//		{
+//
+////			//regardless of duplicates or not, go the the node and write.
+////			CurNode = global_storage[T_line->fp->p->pblk_num]->node_num;
+////
+////			if (unique == 1)//new pblk
+////			{
+////				if (sys_last_busy_time >= Cluster[CurNode]->Last_Busy_Time)
+////				{
+////						Cluster[CurNode]->Last_Busy_Time = sys_last_busy_time + WRITE_LATENCY + DATA_TRANSMISSION;
+////				}
+////				else
+////				{
+////						Cluster[CurNode]->Last_Busy_Time += WRITE_LATENCY + DATA_TRANSMISSION;
+////				}
+////
+////				T_line->Finish_Time = Cluster[CurNode]->Last_Busy_Time;
+////			}
+////			else//duplicates & cache miss: write into cache instead of swap.
+////			{
+////				//get into cache.
+////				T_line->Finish_Time = sys_last_busy_time;
+////			}
+//		}
+//
+//	}
+//
+//
+//
+//	// printf("-----------------------------------------------------------\n");
+//
+//}
 
 void Update_R_Request_Time(struct traceline *T_line, int policy)
 {
@@ -412,11 +348,11 @@ void Update_R_Request_Time(struct traceline *T_line, int policy)
 
 }
 
-float Calculate_G(long long Count_RIO, int policy)
+float Calculate_G_access_per_request(long long Count_RIO, int policy, int recon)
 {
 	std::map<int, int>result;
 
-//	if(Count_RIO -1 >= 0)
+	if(recon == 0)
 	{
 		int n_node;
 		int max = -1;
@@ -429,32 +365,43 @@ float Calculate_G(long long Count_RIO, int policy)
 				max = result[n_node];
 		}
 
-		float ave = (float) 1 / max;
-		//printf("R_Lasting_time:%lld t_straggler=%lld\n", R_Req_Tbl[policy][Count_RIO-1].Lasting_time, R_Req_Tbl[policy][Count_RIO-1].straggler);
-		R_Req_Tbl[policy][Count_RIO-1].G_value = 1 - ave;
+		float G_value = 1 - (float)(R_Req_Tbl[policy][Count_RIO-1].datablks.size()/ec_node)/ max;
+		R_Req_Tbl[policy][Count_RIO-1].G_value = G_value;
 	}
 
 	return R_Req_Tbl[policy][Count_RIO-1].G_value;
 }
 
 
-void Cal_total_latency()
+void Calculate_lasting_T_per_request(long long Count_RIO, int policy)
 {
 	long long max = -1;
+
+	for(int i = 0; i < ec_node; i++)
+	{
+		if(max < Cluster[i]->Last_Busy_Time)
+			max = Cluster[i]->Last_Busy_Time;
+	}
+
+	R_Req_Tbl[policy][Count_RIO-1].Finish_time = max;
+	R_Req_Tbl[policy][Count_RIO-1].Lasting_time = R_Req_Tbl[policy][Count_RIO-1].Finish_time - R_Req_Tbl[policy][Count_RIO-1].Arrive_time;
+	total_l += R_Req_Tbl[policy][Count_RIO-1].Lasting_time;
+}
+
+void Cal_total_statistics()
+{
 	long long sum_access = 0;
 	long long ave_access = 0;
 	long long max_access = -1;
 	float G_access = 0;
 
+	//calculate final G_access
 	for(int i = 0; i < ec_node; i++)
 	{
 		sum_access += Cluster[i]->read_access;
 
 		if(max_access < Cluster[i]->read_access)
 			max_access = Cluster[i]->read_access;
-
-		if(max < Cluster[i]->Last_Busy_Time)
-			max = Cluster[i]->Last_Busy_Time;
 	}
 
 	ave_access = (float)sum_access / ec_node;
@@ -464,7 +411,7 @@ void Cal_total_latency()
 //	printf("ave: %lld, max: %lld", ave_access, max_access);
 	total_access.push_back(G_access);
 
-	total_latency.push_back(max);
+	total_latency.push_back(total_l);
 }
 
 void Cal_CDF(float& value)
@@ -499,7 +446,7 @@ void Cal_CDF(float& value)
 
 }
 
-void CDF_calculation(vector<long long> &array, int write)
+void RW_CDF_calculation(vector<long long> &array, int write)
 {
 	std::vector<struct Request>tmp;
 	int value = -1;
@@ -615,7 +562,7 @@ float Calculate_distance_lbt()
 
 
 //Process a Read request
-void Read_by_FP(struct traceline *T_line, int policy, int recon)
+void Read_first_by_FP(struct traceline *T_line, int policy, int recon)
 {
 
 	struct fp_node *fp = NULL;
@@ -742,26 +689,31 @@ void Read_by_FP(struct traceline *T_line, int policy, int recon)
 }
 
 //Process a Read request by mapping blk to eliminate missing read.
-void Read_by_lpblk(struct traceline *T_line, int policy)
+void Read_by_lpblk(struct traceline *T_line, int policy, int recon)
 {
 	int CurNode = 0;
 
-	int queue = -1;
+//	int queue = -1;
 	// printf("-------------------------line[%lld] Read----------------------\n", total_line);
 
 	long long datapblk_num = (T_line->Address / 8 + 1) % (datablk_serial) ;
 
 	long long pblk_num = blk_mapping[datapblk_num];
 
-	R_Req_Tbl[policy][T_line->Request_index].datablks.push_back(datapblk_num);
-
 	CurNode = global_storage[pblk_num]->node_num;
 
-	printf("RID: %s [dataNum: %3lld] P_num[%5lld]  Node_num[%3d]\n", T_line->RequestID, datapblk_num, pblk_num, CurNode);
+//	printf("RID: %s [dataNum: %3lld] Node_num[%3d]\n", T_line->RequestID, datapblk_num, CurNode);
 
 	//check cache
 //	sys_last_busy_time += ACCESS_CACHE;
 
+	R_Req_Tbl[recon][T_line->Request_index].datablks.push_back(datapblk_num);
+	R_Req_Tbl[recon][T_line->Request_index].arrive_times.insert(std::make_pair(datapblk_num, T_line->Arrive_Time));
+
+	if(recon == 1)
+	{
+		return ;
+	}
 
 	if(Routine_N_cache(T_line->fp))//N_cache hit
 	{
@@ -783,40 +735,40 @@ void Read_by_lpblk(struct traceline *T_line, int policy)
 			Cluster[CurNode]->total_access_count++;
 			Cluster[CurNode]->read_access++;
 
-			queue = (Cluster[CurNode]->read_access - 1) % QUEUE_NUM;
+//			queue = (Cluster[CurNode]->read_access - 1) % QUEUE_NUM;
 //			printf("ACCESS Node[%3d]: %5lld --> ", CurNode, Cluster[CurNode]->Last_Busy_Time);
 
 
-			if (sys_last_busy_time > Cluster[CurNode]->queques[queue])
+			if (sys_last_busy_time > Cluster[CurNode]->Last_Busy_Time)
 			{
-				Cluster[CurNode]->queques[queue] = sys_last_busy_time + READ_LATENCY + DATA_TRANSMISSION;
+				Cluster[CurNode]->Last_Busy_Time = sys_last_busy_time + READ_LATENCY + DATA_TRANSMISSION;
 				//there we assume client first go to check the MDS and then cache miss and then go to Cluster.
 			}
 			else
 			{
 			//	printf("Blocked[Node Busy]!\n");
 				read_blk_num++;
-				Cluster[CurNode]->queques[queue] += READ_LATENCY + DATA_TRANSMISSION;
+				Cluster[CurNode]->Last_Busy_Time += READ_LATENCY + DATA_TRANSMISSION;
 			}
 
 //			printf("%5lld\n", Cluster[CurNode]->Last_Busy_Time);
 	//		sys_last_busy_time = Cluster[CurNode]->Last_Busy_Time + ACCESS_CACHE + SHA1_COST; // the metadata needs to get the read data and compute the sha1 and write into cache.
 
-			if(T_line->Finish_Time < Cluster[CurNode]->queques[queue] + ACK_TIME)
-				T_line->Finish_Time = Cluster[CurNode]->queques[queue] + ACK_TIME;
+			if(T_line->Finish_Time < Cluster[CurNode]->Last_Busy_Time + ACK_TIME)
+				T_line->Finish_Time = Cluster[CurNode]->Last_Busy_Time + ACK_TIME;
 
 //			Print_Cluster_Time();
 		}
 		else
 		{
-//			printf("Access [blk: %5lld] in Node[%2d]: Failure!\n", pblk_num, CurNode);
+			printf("Access [blk: %5lld] in Node[%2d]: Failure!\n", pblk_num, CurNode);
 			long long t = Degraded_read(pblk_num);
 
 			if(T_line->Finish_Time < t)
 				T_line->Finish_Time = t;
 		}
 
-		Update_R_Request_Time(T_line, policy);
+		Update_R_Request_Time(T_line, recon);
 	}
 
 }
@@ -844,19 +796,19 @@ long long Degraded_read(long long pblk_num)
 
 	for(int i = 0; i < stripe_tbl[stripe_num].parity.size() ; i++)
 	{
-			tmp.push_back(stripe_tbl[stripe_num].parity[i]);
+		tmp.push_back(stripe_tbl[stripe_num].parity[i]);
 	}
 
 	std::random_shuffle(tmp.begin(), tmp.end());
 
 	tmp.resize(ec_k);
 
-//	printf("Helper p_block[Node]:  ");
-//	for(int i = 0; i < tmp.size() ; i++)
-//	{
-//		printf(" %5lld [%2lld] ", tmp[i], tmp[i] % ec_node);
-//	}
-//	printf("\n");
+	printf("Helper p_block[Node]:  ");
+	for(int i = 0; i < tmp.size() ; i++)
+	{
+		printf(" %5lld [%2lld] ", tmp[i], tmp[i] % ec_node);
+	}
+	printf("\n");
 
 	for(int i = 0; i < tmp.size() ; i++)
 	{
@@ -868,6 +820,7 @@ long long Degraded_read(long long pblk_num)
 		{
 			Cluster[Cur_node]->total_access_count++;
 			Cluster[Cur_node]->read_access++;
+			Cluster[Cur_node]->degrade_access++;
 
 			queue = (Cluster[CurNode]->read_access - 1) % QUEUE_NUM;
 //			printf("ACCESS Node[%d]: %5lld --> ", Cur_node, Cluster[Cur_node]->Last_Busy_Time);
@@ -1025,8 +978,6 @@ void Print_multimap(multimap<long long, int> &A)
 //analysis Read_request[Count_RIO]
 void Schedule_request(long long Count_RIO, int policy)
 {
-
-//	printf("Request[%5lld]: ", Count_RIO-1);
 	long long start_block = R_Req_Tbl[policy][Count_RIO-1].datablks.front();
 	long long end_block = R_Req_Tbl[policy][Count_RIO-1].datablks.back();
 
@@ -1057,6 +1008,8 @@ void Schedule_request(long long Count_RIO, int policy)
 		{
 			Latest_Arrive_T_per_S[data/ec_k] = arrive_time;
 		}
+
+//		printf("[%lld]: Arrive_time: %lld\n", total_line, Latest_Arrive_T_per_S[data/ec_k]);
 	}
 
 //	printf("\n");
@@ -1076,8 +1029,9 @@ void Schedule_request(long long Count_RIO, int policy)
 
 
 	/*Rescheduling*/
-	vector<int>selection;
+	vector< vector<int> >selection;
 	vector<long long> fullstripe_num;
+	map<int, int>recon_G;
 	selection.clear();
 	fullstripe_num.clear();
 
@@ -1090,15 +1044,16 @@ void Schedule_request(long long Count_RIO, int policy)
 	//process first and last stripe
 	for(si = S.begin(); si != S.end(); si++)
 	{
-		if(S[si->first].size() < ec_k)
+		if(S[si->first].size() < ec_k)//process non-full stripes
 		{
+			//process the request with normal read
 			for(int j = 0; j < S[si->first].size(); j++)
 			{
 				long long datablk = S[si->first][j];
 				long long pblk_num = blk_mapping[datablk];
 				int node_num = global_storage[pblk_num]->node_num;
-//				long long arrive_time = R_Req_Tbl[policy][Count_RIO-1].arrive_times[S[si->first][j]];
-				long long arrive_time = Latest_Arrive_T_per_S[datablk/ec_k];
+				long long arrive_time = R_Req_Tbl[policy][Count_RIO-1].arrive_times[S[si->first][j]];//for non-reschedule ones, it should be the same.
+//				long long arrive_time = Latest_Arrive_T_per_S[datablk/ec_k];
 
 //				printf(" [%5lld: %lld ", datablk, arrive_time);
 				//process the request with normal read
@@ -1108,6 +1063,7 @@ void Schedule_request(long long Count_RIO, int policy)
 //					printf("  ] ");
 					Cluster[node_num]->total_access_count++;
 					Cluster[node_num]->read_access++;
+					recon_G[node_num]++;
 
 					if(sys_last_busy_time < arrive_time)
 					{
@@ -1139,97 +1095,156 @@ void Schedule_request(long long Count_RIO, int policy)
 		else
 		{
 			fullstripe_num.push_back(si->first);
+
+			long long cur_stripe = fullstripe_num.back();
+
+			selection.resize(fullstripe_num.size());
+
+			for(int i = 0; i < ec_node; i++)
+			{
+				result.insert(std::make_pair(Cluster[i]->Last_Busy_Time, i));
+				//including the healthy nodes
+				if(Cluster[i]->failed != 1)
+					free_nodes.insert(i);
+			}
+
+			H_nodes = free_nodes;
+			for(int j = 0; j < ec_k; j++)
+			{
+
+			//Print_set(free_nodes);
+				ri = result.begin();
+			//	printf("Begin() [%d]: %5lld\n", ri->second, ri->first);
+				while(H_nodes.find(ri->second)==H_nodes.end())// it is not a free node
+				{
+			//		printf("Find a used node: %d\n", ri->second);
+					ri++;
+				}
+
+				//found a healthy node with the least loads.
+
+				int chosen_node = ri->second;
+
+				long long pblk_num = ec_node * cur_stripe + chosen_node;
+				long long datablk_num = global_storage[pblk_num]->data_blk_num;
+				long long arrive_time = Latest_Arrive_T_per_S[datablk_num/ec_k];
+				long long lbt = -1;
+
+			//	printf(" [N:%5d: %lld ", chosen_node, arrive_time);
+
+				if(Cluster[chosen_node]->failed != 1 && global_storage[pblk_num]->corrupted != 1)
+				{
+			//		printf("  ] ");
+					//Print_Cluster_Time();
+					Cluster[chosen_node]->total_access_count++;
+					Cluster[chosen_node]->read_access++;
+					recon_G[chosen_node]++;
+
+					if(sys_last_busy_time < arrive_time)
+					{
+						sys_last_busy_time = arrive_time;
+					}
+
+					if (sys_last_busy_time > Cluster[chosen_node]->Last_Busy_Time)
+					{
+						Cluster[chosen_node]->Last_Busy_Time = sys_last_busy_time + READ_LATENCY + DATA_TRANSMISSION;
+					}
+					else
+					{
+								//printf("Blocked[Node Busy]!\n");
+						read_blk_num++;
+						Cluster[chosen_node]->Last_Busy_Time += READ_LATENCY + DATA_TRANSMISSION;
+					}
+
+					lbt = Cluster[chosen_node]->Last_Busy_Time;
+					result.insert(std::make_pair(lbt, chosen_node));
+					result.erase(ri);
+					selection[fullstripe_num.size()-1].push_back(chosen_node);
+					H_nodes.erase(chosen_node);
+
+					//printf("Chosen Node[%d]: %5lld---> %5lld\n", chosen_node, lbt - (READ_LATENCY + DATA_TRANSMISSION), lbt);
+
+					//printf("After insert New\n");
+					//Print_multimap(result);
+
+					//printf("After Erase old\n");
+					//Print_multimap(result);
+
+					//Print_Cluster_Time();
+
+				}
+				else//degraded read
+				{
+					//printf(" X] ");
+					//printf("Access [blk: %5lld] in Node[%2d]: Failure!\n", pblk_num, CurNode);
+					long long t = Degraded_read(pblk_num);
+				}
+
+			}
+
 		}
 
 	}
 
-	for(int i = 0; i < ec_node; i++)
-	{
-		result.insert(std::make_pair(Cluster[i]->Last_Busy_Time, i));
-		//including the healthy nodes
-		if(Cluster[i]->failed != 1)
-			free_nodes.insert(i);
-	}
+//	selection.resize(fullstripe_num.size());
+//
+//	for(int i = 0; i < ec_node; i++)
+//	{
+//		result.insert(std::make_pair(Cluster[i]->Last_Busy_Time, i));
+//		//including the healthy nodes
+//		if(Cluster[i]->failed != 1)
+//			free_nodes.insert(i);
+//	}
 
 //	Print_multimap(result);
 
+//	printf("\n");
+
 	for(int i = 0; i < fullstripe_num.size(); i++)
 	{
-		H_nodes = free_nodes;
-		for(int j = 0; j < ec_k; j++)
+		vector <int> tmp;
+		for(int j = 0; j < S[fullstripe_num[i]].size(); j++)
 		{
+			long long datablk = S[fullstripe_num[i]][j];
+			long long pblk_num = blk_mapping[datablk];
+			int node_num = global_storage[pblk_num]->node_num;
+			tmp.push_back(node_num);
+		}
 
-//			Print_set(free_nodes);
-			ri = result.begin();
-//			printf("Begin() [%d]: %5lld\n", ri->second, ri->first);
-			while(H_nodes.find(ri->second)==H_nodes.end())// it is not a free node
-			{
-//				printf("Find a used node: %d\n", ri->second);
-				ri++;
-			}
+		if(tmp != selection[i])
+		{
+			recon_stripe_count++;
+			R_Req_Tbl[policy][Count_RIO-1].recon = 1;
+			break;
 
-			//found a healthy node with the least loads.
-
-			int chosen_node = ri->second;
-
-			long long pblk_num = ec_node * fullstripe_num[i] + chosen_node;
-			long long datablk_num = global_storage[pblk_num]->data_blk_num;
-			long long arrive_time = Latest_Arrive_T_per_S[datablk_num/ec_k];
-			long long lbt = -1;
-
-//			printf(" [N:%5d: %lld ", chosen_node, arrive_time);
-			//process the request with normal read
-			if(Cluster[chosen_node]->failed != 1 && global_storage[pblk_num]->corrupted != 1)
-			{
-//				printf("  ] ");
-				//Print_Cluster_Time();
-				Cluster[chosen_node]->total_access_count++;
-				Cluster[chosen_node]->read_access++;
-
-				if(sys_last_busy_time < arrive_time)
-				{
-					sys_last_busy_time = arrive_time;
-				}
-
-				if (sys_last_busy_time > Cluster[chosen_node]->Last_Busy_Time)
-				{
-					Cluster[chosen_node]->Last_Busy_Time = sys_last_busy_time + READ_LATENCY + DATA_TRANSMISSION;
-				}
-				else
-				{
-					//printf("Blocked[Node Busy]!\n");
-					read_blk_num++;
-					Cluster[chosen_node]->Last_Busy_Time += READ_LATENCY + DATA_TRANSMISSION;
-				}
-
-				lbt = Cluster[chosen_node]->Last_Busy_Time;
-				result.insert(std::make_pair(lbt, chosen_node));
-				result.erase(ri);
-				selection.push_back(chosen_node);
-				H_nodes.erase(chosen_node);
-
-				//printf("Chosen Node[%d]: %5lld---> %5lld\n", chosen_node, lbt - (READ_LATENCY + DATA_TRANSMISSION), lbt);
-
-				//printf("After insert New\n");
-				//Print_multimap(result);
-
-				//printf("After Erase old\n");
-				//Print_multimap(result);
-
-				//Print_Cluster_Time();
-
-			}
-			else//degraded read
-			{
-//				printf(" X] ");
-				//printf("Access [blk: %5lld] in Node[%2d]: Failure!\n", pblk_num, CurNode);
-				long long t = Degraded_read(pblk_num);
-			}
-
+//			for(int j = 0; j < selection[i].size(); j++)
+//			{
+//				printf("%2d->[%2d] ", tmp[j], selection[i][j]);
+//			}
+//
+//			printf("\n");
 		}
 	}
 
-//	printf("\n");
+
+	/*Calculate access G*/
+	int n_node;
+	int max = -1;
+
+	map<int, int>::iterator ji;
+	for(ji = recon_G.begin(); ji != recon_G.end(); ji++)
+	{
+		n_node = ji->first;
+		if(max < recon_G[n_node])
+			max = recon_G[n_node];
+	}
+
+	float G_value = 1 - (float)(R_Req_Tbl[policy][Count_RIO-1].datablks.size()/ec_node)/ max;
+	R_Req_Tbl[policy][Count_RIO-1].G_value = G_value;
+
+
+
+
 
 //	if(selection.size() != 0)
 //	{
@@ -1295,7 +1310,16 @@ int Request(struct traceline *T_line, int policy, int recon)
 			if(Count_RIO -1 >= 0)
 			{
 				if(recon == 1)
+				{
 					Schedule_request(Count_RIO, policy);
+				}
+				else
+				{
+					float G = Calculate_G_access_per_request(Count_RIO, policy, recon);
+					Cal_CDF(G);
+				}
+
+				Calculate_lasting_T_per_request(Count_RIO, policy);
 
 				load_balancer_lbt[recon].push_back(Calculate_distance_lbt());
 				load_balancer_access[recon].push_back(Calculate_distance_access());
@@ -1476,9 +1500,23 @@ void Process_ReadTrace(std::vector<struct Read_request> &Read_trace, std::vector
 }
 
 
-void Deal_last_request(int Count_RIO, int policy)
+void Deal_last_request(int Count_RIO, int policy, int recon)
 {
-	Schedule_request(Count_RIO, policy);
+
+	if(recon == 1)
+	{
+		Schedule_request(Count_RIO, recon);
+	}
+	else
+	{
+		float G = Calculate_G_access_per_request(Count_RIO, recon, recon);
+		Cal_CDF(G);
+	}
+
+	Calculate_lasting_T_per_request(Count_RIO, recon);
+
+	load_balancer_lbt[recon].push_back(Calculate_distance_lbt());
+	load_balancer_access[recon].push_back(Calculate_distance_access());
 }
 
 struct Result Process(char **files, int trace_start, int trace_end, struct traceline *T_line, int ec, int policy, int iteratimes, int degraded, int recon)
@@ -1494,17 +1532,6 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 
 	res.policy = policy;
 
-	if(recon == 1)
-	{
-		printf("using Recon!\n");
-	}
-
-	else
-	{
-		printf("Using normal!\n");
-	}
-
-
 	switch(policy)
 	{
 		case 0:
@@ -1516,30 +1543,23 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 	    case 2:
 	    	res.p_name = (char *)"DA";
 	    	break;
-	    case 3:
-	    	res.p_name = (char *)"DA_noRR";
-	    	break;
-	    case 4:
-	    	res.p_name = (char *)"DA_access_b";
-	    	break;
-	    case 5:
-	    	res.p_name = (char *)"DA_lbt_b";
-	        break;
-	    case 6:
-	    	res.p_name = (char *)"DA_lbt_mix";
-	    	break;
-	    case 7:
-	   	    res.p_name = (char *)"DA_SRA_B";
-	   	    break;
-	    case 8:
-	   	    res.p_name = (char *)"P_Balance";
-	   	    break;
 	    default:
 	    	res.p_name = (char *)"Wrong Policy";
 	}
 
 	if(degraded == 0)
-		printf("-----------------------[%-10s]---------------------------\n", res.p_name);
+	{
+		if(recon == 1)
+		{
+			printf("-----------------[%-10s]   using Recon!-------------------\n", res.p_name);
+		}
+
+		else
+		{
+			printf("-----------------[%-10s]   using Normal!-------------------\n", res.p_name);
+
+		}
+	}
 
 	char buffer[MAX_PATH_SIZE + MAX_META_SIZE];
 
@@ -1561,10 +1581,10 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 	    {
 	    	total_line++;
 
-	    	if(total_line == 148)
-	    	{
-	    		printf("now [%lld]\n", total_line);
-	    	}
+//	    	if(total_line == 148)
+//	    	{
+//	    		printf("now [%lld]\n", total_line);
+//	    	}
 
 		    if (strcmp(buffer, "\n") == 0)
 		    {
@@ -1579,7 +1599,7 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 //				printf("--------------------------------line[%lld]: %s----------------------\n", total_line, T_line->Type);
 //				printf("line[%4lld]: A_time: %lld pos: %lld ReqID: %s Type:%s \n", total_line, T_line->Arrive_Time, T_line->pos, T_line->RequestID, T_line->Type);
 
-				if(Request(T_line, policy, recon) == -1)
+				if(Request(T_line, recon, recon) == -1)
 					continue;
 
 				if(strcmp(T_line->Type, "write") == 0)
@@ -1600,7 +1620,7 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 		    		}
 
 //					Write_Process(T_line, ec, policy);
-					Write_Process_no_cal(T_line, ec, policy);
+					Write_Process_no_Dedup(T_line, ec, policy, recon);
 					
 				} 
 				else if (strcmp(T_line->Type, "read") == 0)
@@ -1610,8 +1630,8 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 					{
 						sys_last_busy_time += ENCODE_COST;
 
-			   			int s_p = Placement(soe,policy);
-			   			Finish_time_SOE(s_p, policy);
+			   			int s_p = Placement(soe,policy, recon);
+			   			Finish_time_SOE(s_p, recon);
 			   			Reset_SOE(ec_k);
 
 					}
@@ -1649,8 +1669,8 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 
 					}
 					read_count++;
-					Read_by_FP(T_line, policy, recon);
-//					Read_by_lpblk(T_line, policy);
+//					Read_first_by_FP(T_line, policy, recon);
+					Read_by_lpblk(T_line, policy, recon);
 				}
 				else
 				{
@@ -1675,33 +1695,24 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 //			printf("[End of File]--> Placement!\n");
 			sys_last_busy_time += ENCODE_COST;
 
-			int s_p = Placement(soe, policy);
-			Finish_time_SOE(s_p, policy);
+			int s_p = Placement(soe, policy, recon);
+			Finish_time_SOE(s_p, recon);
 //			Print_SOE();
 //			Print_stripe(s_p);
 			Reset_SOE(ec_k);
 		}
 
-		if(recon == 1)
-		{
-			Deal_last_request(R_Req_Tbl[policy].size(), policy);
-		}
+		Deal_last_request(R_Req_Tbl[recon].size(), policy, recon);
 	}
 	
 
 	Print_Cluster_Time();
 
-	Print_stripe_tbl();
-
-	if(policy == Policy - 1)
-	{
-//		Print_Req_Tbl(W_Req_Tbl, WRITE);
-//		Print_Req_Tbl(R_Req_Tbl, READ);
-	}
+//	Print_stripe_tbl();
 //	Print_Blk_Mapping();
 
-	Generalize_ReadTrace_ALL(Read_trace, R_Req_Tbl[policy], READ);
-//	Print_ReadTrace(Read_trace);
+	Generalize_ReadTrace_ALL(Read_trace, R_Req_Tbl[recon], READ);
+	Print_ReadTrace(Read_trace);
 
 //	Read_Table(Read_trace, 1);
 //	Print_ReadTrace(Read_trace);
@@ -1721,20 +1732,13 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 
 		if(policy == 0)
 	    {
-		    printf("totalline: %lld || effectiveline: %lld || writecount: %lld || readcount: %lld || badread: %lld degraded_read: %lld || othercount: %lld\n", total_line, effective_line_count, write_count, read_count, readline_not_by_fp, degraded_read, other_count);
-
-		    long long unique_fp = HASH_COUNT(fp_store);
-		    printf("Dup_rate: %f\n", (double)(write_count-unique_fp)/(double)write_count);
+		    printf("totalline: %lld || writecount: %lld || readcount: %lld || recon_read: %lld degraded_read: %lld \n", total_line, write_count, read_count, recon_stripe_count, degraded_read);
 		    printf("R/W [%4.3f] Read block time[Node busy]: %lld\n", (float) read_count / write_count, read_blk_num);
 	    }
 	}
 
-	Cal_total_latency();
+	Cal_total_statistics();
 
-////Output_Result(policy);
-//	printf("policy: %2d  %lld\n", policy, R_Request_lasting_time);
-
-	//printf("pblk number is: %ld\n", pblk_used);
 	return res;
 
 }

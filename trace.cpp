@@ -24,6 +24,7 @@ void Init_CurRequest()
 
 	CurReq.remain.clear();
 	CurReq.reponse_times.clear();
+	CurReq.recon = 0;
 
 	for(int i = 0; i < ec_node * QUEUE_NUM; i++)
 	{
@@ -48,6 +49,7 @@ void Clear_CurRequest()
 	CurReq.used_nodes.clear();
 
 	CurReq.remain.clear();
+	CurReq.recon = 0;
 
 	CurReq.datablks.clear();
 	CurReq.arrive_times.clear();
@@ -723,28 +725,28 @@ void Output_Data(int policy, int fiu)
 
 void Print_ReadTrace(std::vector<struct Read_request> &ReadTrace)
 {
-	printf("%6s  %10s  %-40s  %4s  \n", "Index", "L_time", "Datablk_set", "G_value");
+	printf("---------------Printing Read Trace----------------\n");
+	printf("%6s %-40s  %10s %4s  \n", "Index", "Datablk_set.size()", "Lasting_T", "G_value");
 
 	map<long long, long long>::iterator ai;
 
 	for (int i = 0; i < ReadTrace.size(); i++)
 	{
 
-		printf("%-6lld  %10lld ", ReadTrace[i].R_Req_Index, ReadTrace[i].Lasting_time);
-
-		for(int j = 0; j < ReadTrace[i].datablks.size(); j++)
+//		if(ReadTrace[i].datablks.size() > ec_k)
 		{
-			long long data = ReadTrace[i].datablks[j];
-//			printf(" %2lld ", ReadTrace[i].datablks[j] % ec_node);
-			printf(" [%5lld: XX] ", data);
+			printf("%-6lld %5lu %10lld", ReadTrace[i].R_Req_Index, ReadTrace[i].datablks.size(), ReadTrace[i].Lasting_time);
+	//		for(int j = 0; j < ReadTrace[i].datablks.size(); j++)
+	//		{
+	//			long long data = ReadTrace[i].datablks[j];
+	////			printf(" %2lld ", ReadTrace[i].datablks[j] % ec_node);
+	//			printf(" [%5lld: XX] ", data);
+	//		}
+
+
+			printf(" %20.2f ", ReadTrace[i].G_value);
+			printf("\n");
 		}
-
-
-		printf(" %20.2f ", ReadTrace[i].G_value);
-
-//		printf(" %lld ", ReadTrace[i].t_straggler);
-
-		printf("\n");
 	}
 
 }
@@ -798,9 +800,9 @@ int Argv_Parse(int argc, char ** argv, char *file_prefix, char *file_suffix)
 {  
     //printf("------------------------Doing Argv_Parsing----------------------------\n");
 	
-	if (argc < 9) {
+	if (argc < 7) {
 		printf("Do not have enough parameters!\n");
-		printf("Usage: ./main [tracefolder_path/] [(policy)1|2] [start_num] [end_num] [result_file] [node_num] [max_blk_num] [maxFp_num] [cache_f8]\n");
+		printf("Usage: ./main [tracefolder_path/] [start_num] [end_num] [node_num] [IO policy] [Placement] [Degraded] \n");
 		return -1;
 	}
                    
@@ -818,12 +820,12 @@ int Argv_Parse(int argc, char ** argv, char *file_prefix, char *file_suffix)
 	//assign args
 	trace_start = atoi(argv[2]);
     trace_end = atoi(argv[3]);
-    ec_node = atoi(argv[5]);
-    printf("EC_node: %d\n", ec_node);
-    max_fp_num = atoi(argv[6]);
-    max_blk_num = atoi(argv[7]);
-    cache_size = atoi(argv[8]);
-    
+    ec_node = atoi(argv[4]);
+    Scheduler_num = atoi(argv[5]);
+    P_Policy = atoi(argv[6]);
+    degraded = atoi(argv[7]);
+    printf("EC_node: %d Placement: %d Scheduler_num: %d [Degraded: %d]\n", ec_node, P_Policy, Scheduler_num, degraded);
+
     // form the legal tracefile address
     files = (char **)malloc((trace_end - trace_start)*sizeof(char *));
     
@@ -941,21 +943,18 @@ void Output_Result(int policy)
 
 void Create_Default_Setting(char *** p)
 {
-    (*p) = (char **)malloc(11 * sizeof(char *));
+    (*p) = (char **)malloc(8* sizeof(char *));
 //    printf("sizeof: %ld\n", sizeof(*p));
 
-    (*p)[0] = (char *)"./a,out";
+    (*p)[0] = (char *)"./a.out";
     (*p)[1] = (char *)"./caftl/";//CAFTL trace
 //    (*p)[1] = (char *)"./trace/fiu/homes/";//CAFTL trace
 
-    (*p)[2] = (char *)"1";
-    (*p)[3] = (char *)"2";
-    (*p)[4] = (char *)"1.txt";
-    (*p)[5] = (char *)"6"; //Node_num
-    (*p)[6] = (char *)"5000";
-    (*p)[7] = (char *)"200000";
-    (*p)[8] = (char *)"500000"; /*500000 * 4KB = 2GB*/
-    (*p)[9] = (char *)"1"; //policy
-    (*p)[10]= (char *)"0"; //degraded
+    (*p)[2] = (char *)"2"; //start_num
+    (*p)[3] = (char *)"3"; //end_num
+    (*p)[4] = (char *)"6"; //Node num
+    (*p)[5] = (char *)"2"; //IO policy num
+    (*p)[6] = (char *)"0"; //placement policy: 0:BA 1:RA
+    (*p)[7] = (char *)"0"; //Degraded
 
 }
