@@ -984,10 +984,10 @@ void Print_multimap(multimap<long long, int> &A)
 long long Schedule_request(long long Count_RIO, int policy)
 {
 //	printf("test!\n");
-	if(Count_RIO == 270)
-	{
-		printf("Error![index out of bountry]   %lld\n", Count_RIO);
-	}
+//	if(Count_RIO == 270)
+//	{
+//		printf("Error![index out of bountry]   %lld\n", Count_RIO);
+//	}
 
 	long long finish_time = -1;
 
@@ -1381,13 +1381,13 @@ int Request(struct traceline *T_line, int recon)
 		{
 			if(recon == 1)
 			{
-				if(0 <= last_read_request_index < R_Req_Tbl[recon].size())
+				if((0 <= last_read_request_index) && (last_read_request_index < R_Req_Tbl[recon].size()))
 				{
 					Schedule_request(last_read_request_index, recon);
 				}
 				else
 				{
-					printf("[%5lld]Out of boundary!\n", total_line);
+					printf("[%5lld]Out of boundary! last_read_request_index = %lld size=%lu \n", total_line, last_read_request_index, R_Req_Tbl[recon].size());
 				}
 			}
 
@@ -1395,7 +1395,7 @@ int Request(struct traceline *T_line, int recon)
 //			printf("Before calculating last request!\n");
 //			Print_Cluster_Time();
 
-			load_balancer_lbt[recon].push_back(Calculate_distance_lbt());
+//			load_balancer_lbt[recon].push_back(Calculate_distance_lbt());
 			load_balancer_access[recon].push_back(Calculate_distance_access());
 		}
 
@@ -1690,7 +1690,7 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 						last_op = 1;
 					else if(last_op == 2)
 					{
-						printf("[OP]Read --> Write\n");
+//						printf("[OP]Read --> Write\n");
 //						Reset_time();
 						last_op = 1;
 					}
