@@ -124,7 +124,9 @@ void Write_Process_no_Dedup(struct traceline *T_line, int ec, int policy, int re
 			    sys_last_busy_time += ENCODE_COST;
 
 			   	int s_p = Placement(soe, policy, recon);
-			   	Finish_time_SOE(s_p, recon);
+//			   	Finish_time_SOE(s_p, recon);
+//			   	printf("encoding finished!\n");
+//			   	Print_Cluster_Time();
 //			   	Print_SOE();
 			   	Reset_SOE(ec_k);
 			}
@@ -319,10 +321,11 @@ void Update_R_Request_Time(struct traceline *T_line, int policy)
 {
 
 	// printf("Update_R_Request_Time!\n");
-	// printf("T_line->Arrive_Time: %lld   Req_Tbl[T_line->Request_index].Arrive_time: %lld\n", T_line->Arrive_Time, Req_Tbl[T_line->Request_index].Arrive_time);
+
 	if (R_Req_Tbl[policy][T_line->Request_index].Arrive_time > T_line->Arrive_Time)
 	{
 		printf("[Error]:R_Request[%lld].Arrive_Time Wrong!\n", T_line->Request_index);
+		printf("[%5lld]T_line->Arrive_Time: %lld   Req_Tbl[T_line->Request_index].Arrive_time: %lld\n", total_line, T_line->Arrive_Time, R_Req_Tbl[policy][T_line->Request_index].Arrive_time);
 		R_Req_Tbl[policy][T_line->Request_index].Arrive_time = T_line->Arrive_Time;
 	}
 	
@@ -340,55 +343,55 @@ void Update_R_Request_Time(struct traceline *T_line, int policy)
 	
 	R_Req_Tbl[policy][T_line->Request_index].reponse_times.push_back(T_line->Finish_Time - T_line->Arrive_Time);
 
+	Calculate_G_access_per_request(T_line->Request_index+1, policy);
+
 
 //	R_Req_Tbl[policy][T_line->Request_index].G_value = 1 - ((float) R_Req_Tbl[policy][T_line->Request_index].Lasting_time / R_Req_Tbl[policy][T_line->Request_index].datablks.size() / R_Req_Tbl[policy][T_line->Request_index].straggler);
 
-//	printf("R_Req_Tbl[%5lld]: straggler= %5lld   G_value: %5.2f\n", T_line->Request_index, R_Req_Tbl[T_line->Request_index].straggler, R_Req_Tbl[T_line->Request_index].G_value);
+//	printf("[%5lld] R_Req_Tbl[%5lld]: F_time= %5lld G=%5.3f\n", total_line, T_line->Request_index, R_Req_Tbl[policy][T_line->Request_index].Finish_time, R_Req_Tbl[policy][T_line->Request_index].G_value);
 
 
 }
 
-float Calculate_G_access_per_request(long long Count_RIO, int policy, int recon)
+float Calculate_G_access_per_request(long long Count_RIO, int recon)
 {
 	std::map<int, int>result;
+	std::map<int, int>::iterator ri;
+	result.clear();
 
-	if(recon == 0)
 	{
 		int n_node;
 		int max = -1;
 
-		for(int j = 0; j < R_Req_Tbl[policy][Count_RIO-1].datablks.size(); j++)
+		for(int j = 0; j < R_Req_Tbl[recon][Count_RIO-1].datablks.size(); j++)
 		{
-			n_node = global_storage[blk_mapping[R_Req_Tbl[policy][Count_RIO-1].datablks[j]]]->node_num;
+			n_node = global_storage[blk_mapping[R_Req_Tbl[recon][Count_RIO-1].datablks[j]]]->node_num;
 			result[n_node]++;
-			if(max < result[n_node])
-				max = result[n_node];
+
 		}
 
-		float G_value = 1 - (float)(R_Req_Tbl[policy][Count_RIO-1].datablks.size()/ec_node)/ max;
-		R_Req_Tbl[policy][Count_RIO-1].G_value = G_value;
+		for(ri = result.begin(); ri != result.end(); ri++)
+		{
+			if(max < ri->second)
+				max = ri->second;
+		}
+
+		float G_value = 1 - (float)(R_Req_Tbl[recon][Count_RIO-1].datablks.size()/ec_node)/ max;
+		R_Req_Tbl[recon][Count_RIO-1].G_value = G_value;
 	}
 
-	return R_Req_Tbl[policy][Count_RIO-1].G_value;
+	return R_Req_Tbl[recon][Count_RIO-1].G_value;
 }
 
 
 void Calculate_lasting_T_per_request(long long Count_RIO, int policy)
 {
-	long long max = -1;
+//	R_Req_Tbl[policy][Count_RIO-1].Finish_time = max;
 
-	for(int i = 0; i < ec_node; i++)
-	{
-		if(max < Cluster[i]->Last_Busy_Time)
-			max = Cluster[i]->Last_Busy_Time;
-	}
 
-	R_Req_Tbl[policy][Count_RIO-1].Finish_time = max;
-	R_Req_Tbl[policy][Count_RIO-1].Lasting_time = R_Req_Tbl[policy][Count_RIO-1].Finish_time - R_Req_Tbl[policy][Count_RIO-1].Arrive_time;
-	total_l += R_Req_Tbl[policy][Count_RIO-1].Lasting_time;
 }
 
-void Cal_total_statistics()
+void Cal_total_statistics(int recon)
 {
 	long long sum_access = 0;
 	long long ave_access = 0;
@@ -411,37 +414,44 @@ void Cal_total_statistics()
 //	printf("ave: %lld, max: %lld", ave_access, max_access);
 	total_access.push_back(G_access);
 
+	total_l = 0;
+	for(int i = 0; i < R_Req_Tbl[recon].size(); i++)
+	{
+		total_l += R_Req_Tbl[recon][i].Lasting_time;
+		Cal_CDF(R_Req_Tbl[recon][i].G_value, recon);
+	}
+
 	total_latency.push_back(total_l);
 }
 
-void Cal_CDF(float& value)
+void Cal_CDF(float& value, int recon)
 {
-	CDF[5]++; //100%
+	cdf[recon][5]++; //100%
 
 	//CDF
 	if(value <= 0.8) //80%
 	{
-		CDF[4]++;
+		cdf[recon][4]++;
 	}
 
 	if(value <= 0.6) //60%
 	{
-		CDF[3]++;
+		cdf[recon][3]++;
 	}
 
 	if(value <= 0.4) //40%
 	{
-		CDF[2]++;
+		cdf[recon][2]++;
 	}
 
 	if(value <= 0.2)//20%
 	{
-		CDF[1]++;
+		cdf[recon][1]++;
 	}
 
 	if(value == 0) //0
 	{
-		CDF[0]++;
+		cdf[recon][0]++;
 	}
 
 }
@@ -669,7 +679,7 @@ void Read_first_by_FP(struct traceline *T_line, int policy, int recon)
 				if(T_line->Finish_Time < Cluster[CurNode]->Last_Busy_Time + ACK_TIME)
 					T_line->Finish_Time = Cluster[CurNode]->Last_Busy_Time + ACK_TIME;
 
-		//			Print_Cluster_Time();
+		//		Print_Cluster_Time();
 			}
 			else
 			{
@@ -689,7 +699,7 @@ void Read_first_by_FP(struct traceline *T_line, int policy, int recon)
 }
 
 //Process a Read request by mapping blk to eliminate missing read.
-void Read_by_lpblk(struct traceline *T_line, int policy, int recon)
+void Read_by_lpblk(struct traceline *T_line, int recon)
 {
 	int CurNode = 0;
 
@@ -702,11 +712,12 @@ void Read_by_lpblk(struct traceline *T_line, int policy, int recon)
 
 	CurNode = global_storage[pblk_num]->node_num;
 
-//	printf("RID: %s [dataNum: %3lld] Node_num[%3d]\n", T_line->RequestID, datapblk_num, CurNode);
+
 
 	//check cache
 //	sys_last_busy_time += ACCESS_CACHE;
 
+//	printf("size of R_Req_Tbl %ld\n")
 	R_Req_Tbl[recon][T_line->Request_index].datablks.push_back(datapblk_num);
 	R_Req_Tbl[recon][T_line->Request_index].arrive_times.insert(std::make_pair(datapblk_num, T_line->Arrive_Time));
 
@@ -714,16 +725,10 @@ void Read_by_lpblk(struct traceline *T_line, int policy, int recon)
 	{
 		return ;
 	}
-
-	if(Routine_N_cache(T_line->fp))//N_cache hit
+	else
 	{
-		r_case_2++;
-		N_cache_hit++;
+//		printf("[%5lld]RID: %s  A_t: %5lld [dataNum: %3lld] Node_num[%3d]\n", total_line, T_line->RequestID, T_line->Arrive_Time  , datapblk_num, CurNode);
 
-		T_line->Finish_Time = sys_last_busy_time;
-	}
-	else//N_cache miss
-	{
 		r_case_4++;
 		N_cache_miss++;
 
@@ -761,7 +766,7 @@ void Read_by_lpblk(struct traceline *T_line, int policy, int recon)
 		}
 		else
 		{
-			printf("Access [blk: %5lld] in Node[%2d]: Failure!\n", pblk_num, CurNode);
+//			printf("Access [blk: %5lld] in Node[%2d]: Failure!\n", pblk_num, CurNode);
 			long long t = Degraded_read(pblk_num);
 
 			if(T_line->Finish_Time < t)
@@ -976,23 +981,36 @@ void Print_multimap(multimap<long long, int> &A)
 
 
 //analysis Read_request[Count_RIO]
-void Schedule_request(long long Count_RIO, int policy)
+long long Schedule_request(long long Count_RIO, int policy)
 {
-	long long start_block = R_Req_Tbl[policy][Count_RIO-1].datablks.front();
-	long long end_block = R_Req_Tbl[policy][Count_RIO-1].datablks.back();
+//	printf("test!\n");
+	if(Count_RIO == 270)
+	{
+		printf("Error![index out of bountry]   %lld\n", Count_RIO);
+	}
+
+	long long finish_time = -1;
 
 	map <long long, vector<long long> >S;
 	map <long long, long long >Latest_Arrive_T_per_S;
 	map <long long, long long >::iterator li;
 	map <long long, vector<long long> >::iterator si;
 
+	if(total_line == 6175)
+	{
+		printf("Stop here!\n");
+	}
+
+
+
 	S.clear();
+	Latest_Arrive_T_per_S.clear();
 
 	/*Getting the stripe infor*/
-	for(int i = 0; i < R_Req_Tbl[policy][Count_RIO-1].datablks.size(); i++)
+	for(int i = 0; i < R_Req_Tbl[policy][Count_RIO].datablks.size(); i++)
 	{
-		long long data = R_Req_Tbl[policy][Count_RIO-1].datablks[i];
-		long long arrive_time = R_Req_Tbl[policy][Count_RIO-1].arrive_times[data];
+		long long data = R_Req_Tbl[policy][Count_RIO].datablks[i];
+		long long arrive_time = R_Req_Tbl[policy][Count_RIO].arrive_times[data];
 //		printf(" [%5lld: %lld   ] ", data, arrive_time);
 		S[data/ec_k].push_back(data);
 
@@ -1049,10 +1067,11 @@ void Schedule_request(long long Count_RIO, int policy)
 			//process the request with normal read
 			for(int j = 0; j < S[si->first].size(); j++)
 			{
+				long long t;
 				long long datablk = S[si->first][j];
 				long long pblk_num = blk_mapping[datablk];
 				int node_num = global_storage[pblk_num]->node_num;
-				long long arrive_time = R_Req_Tbl[policy][Count_RIO-1].arrive_times[S[si->first][j]];//for non-reschedule ones, it should be the same.
+				long long arrive_time = R_Req_Tbl[policy][Count_RIO].arrive_times[S[si->first][j]];//for non-reschedule ones, it should be the same.
 //				long long arrive_time = Latest_Arrive_T_per_S[datablk/ec_k];
 
 //				printf(" [%5lld: %lld ", datablk, arrive_time);
@@ -1081,13 +1100,27 @@ void Schedule_request(long long Count_RIO, int policy)
 						Cluster[node_num]->Last_Busy_Time += READ_LATENCY + DATA_TRANSMISSION;
 					}
 
+					t = Cluster[node_num]->Last_Busy_Time;
+
+
 					//Print_Cluster_Time();
 				}
 				else//degraded read
 				{
 //					printf(" X] ");
 					//printf("Access [blk: %5lld] in Node[%2d]: Failure!\n", pblk_num, CurNode);
-					long long t = Degraded_read(pblk_num);
+					t = Degraded_read(pblk_num);
+				}
+
+				if(t < arrive_time)
+				{
+					printf("[%lld] datablk: %lld t=%lld arrive_time = %lld\n", total_line, datablk, t, arrive_time);
+				}
+
+
+				if(finish_time < t)
+				{
+					finish_time = t;
 				}
 
 			}
@@ -1126,9 +1159,14 @@ void Schedule_request(long long Count_RIO, int policy)
 				int chosen_node = ri->second;
 
 				long long pblk_num = ec_node * cur_stripe + chosen_node;
-				long long datablk_num = global_storage[pblk_num]->data_blk_num;
-				long long arrive_time = Latest_Arrive_T_per_S[datablk_num/ec_k];
+//				long long datablk_num = global_storage[pblk_num]->data_blk_num;
+
+//				long long datablk_num_2 = ec_k * cur_stripe + chosen_node;
+//				long long pblk_num_2 = blk_mapping[datablk_num_2];
+
+				long long arrive_time = Latest_Arrive_T_per_S[cur_stripe];
 				long long lbt = -1;
+				long long t;
 
 			//	printf(" [N:%5d: %lld ", chosen_node, arrive_time);
 
@@ -1156,6 +1194,8 @@ void Schedule_request(long long Count_RIO, int policy)
 						Cluster[chosen_node]->Last_Busy_Time += READ_LATENCY + DATA_TRANSMISSION;
 					}
 
+					t = Cluster[chosen_node]->Last_Busy_Time;
+
 					lbt = Cluster[chosen_node]->Last_Busy_Time;
 					result.insert(std::make_pair(lbt, chosen_node));
 					result.erase(ri);
@@ -1177,7 +1217,18 @@ void Schedule_request(long long Count_RIO, int policy)
 				{
 					//printf(" X] ");
 					//printf("Access [blk: %5lld] in Node[%2d]: Failure!\n", pblk_num, CurNode);
-					long long t = Degraded_read(pblk_num);
+					t = Degraded_read(pblk_num);
+				}
+
+				if(t < arrive_time)
+				{
+					printf("[%lld] t=%lld arrive_time = %lld\n", total_line, t, arrive_time);
+				}
+
+
+				if(finish_time < t)
+				{
+					finish_time = t;
 				}
 
 			}
@@ -1214,15 +1265,18 @@ void Schedule_request(long long Count_RIO, int policy)
 		if(tmp != selection[i])
 		{
 			recon_stripe_count++;
-			R_Req_Tbl[policy][Count_RIO-1].recon = 1;
-			break;
+			R_Req_Tbl[policy][Count_RIO].recon = 1;
 
+//			printf("Reconed:  ");
 //			for(int j = 0; j < selection[i].size(); j++)
 //			{
 //				printf("%2d->[%2d] ", tmp[j], selection[i][j]);
 //			}
 //
 //			printf("\n");
+
+			break;
+
 		}
 	}
 
@@ -1239,12 +1293,20 @@ void Schedule_request(long long Count_RIO, int policy)
 			max = recon_G[n_node];
 	}
 
-	float G_value = 1 - (float)(R_Req_Tbl[policy][Count_RIO-1].datablks.size()/ec_node)/ max;
-	R_Req_Tbl[policy][Count_RIO-1].G_value = G_value;
+	float G_value = 1 - (float)(R_Req_Tbl[policy][Count_RIO].datablks.size()/ec_node)/ max;
+	R_Req_Tbl[policy][Count_RIO].G_value = G_value;
 
 
 
+	R_Req_Tbl[policy][Count_RIO].Finish_time = finish_time;
+	if(R_Req_Tbl[policy][Count_RIO].Finish_time < R_Req_Tbl[policy][Count_RIO].Arrive_time)
+	{
+		printf("Error: Finish_time < Arrive_time!\n");
+		abnormal++;
+	}
+	R_Req_Tbl[policy][Count_RIO].Lasting_time = R_Req_Tbl[policy][Count_RIO].Finish_time - R_Req_Tbl[policy][Count_RIO].Arrive_time;
 
+//	printf("Request[%5lld]: L_time: %7lld-%7lld=%7lld\n", Count_RIO, R_Req_Tbl[policy][Count_RIO].Finish_time, R_Req_Tbl[policy][Count_RIO].Arrive_time, R_Req_Tbl[policy][Count_RIO].Lasting_time);
 
 //	if(selection.size() != 0)
 //	{
@@ -1256,12 +1318,11 @@ void Schedule_request(long long Count_RIO, int policy)
 //		printf("\n");
 //	}
 
+	return finish_time;
 }
 
-int Request(struct traceline *T_line, int policy, int recon)
+int Request(struct traceline *T_line, int recon)
 {
-
-	map<int, int>result;
 
 	if(strcmp("-1", Last_RequestID) == 0 && strcmp(T_line->Type, "read") == 0 )
 	{
@@ -1275,7 +1336,6 @@ int Request(struct traceline *T_line, int policy, int recon)
 
 		if (strcmp(T_line->Type, "write") == 0)
 		{
-//			printf("line[%lld] CurReq.W_Req_Index: %lld\n", total_line, CurReq.W_Req_Index);
 			T_line->Request_index = (Count_WIO-1);
 		}
 		else//read
@@ -1285,13 +1345,10 @@ int Request(struct traceline *T_line, int policy, int recon)
 	}
 	else//new RequestID
 	{
-
-//		printf("New request\n");
 		Clear_CurRequest();
 
 		CurReq.Arrive_time = T_line->Arrive_Time;
 		CurReq.Finish_time = T_line->Finish_Time;
-
 		CurReq.RequestID = strdup(T_line->RequestID);
 		CurReq.Type = strdup(T_line->Type);
 		CurReq.straggler = T_line->trace_num;
@@ -1301,45 +1358,67 @@ int Request(struct traceline *T_line, int policy, int recon)
 			CurReq.W_Req_Index = Count_WIO;
 			T_line->Request_index = CurReq.W_Req_Index;
 			Count_WIO++;
-			W_Req_Tbl[policy].push_back(CurReq);
-//			printf("[In Request]: Write_index[%lld]\n", CurReq.W_Req_Index);
+			W_Req_Tbl[recon].push_back(CurReq);
 		}
 		else//read
 		{
-			//calculate CDF of last read request
-			if(Count_RIO -1 >= 0)
-			{
-				if(recon == 1)
-				{
-					Schedule_request(Count_RIO, policy);
-				}
-				else
-				{
-					float G = Calculate_G_access_per_request(Count_RIO, policy, recon);
-					Cal_CDF(G);
-				}
-
-				Calculate_lasting_T_per_request(Count_RIO, policy);
-
-				load_balancer_lbt[recon].push_back(Calculate_distance_lbt());
-				load_balancer_access[recon].push_back(Calculate_distance_access());
-			}
-//
 //			Reset_time();
 
 			CurReq.R_Req_Index = Count_RIO;
 			T_line->Request_index = CurReq.R_Req_Index;
 			Count_RIO++;
+			R_Req_Tbl[recon].push_back(CurReq);
 
-			R_Req_Tbl[policy].push_back(CurReq);
+//			if(T_line->Request_index == 271)
+//			{
+//				printf("R_request[%lld]---[%6lld]\n", T_line->Request_index, total_line);
+//			}
 
 		}
+
+		//process last read
+		if(last_read == 1)
+		{
+			if(recon == 1)
+			{
+				if(0 <= last_read_request_index < R_Req_Tbl[recon].size())
+				{
+					Schedule_request(last_read_request_index, recon);
+				}
+				else
+				{
+					printf("[%5lld]Out of boundary!\n", total_line);
+				}
+			}
+
+//			printf("Request[%5lld]: L_time: %7lld-%7lld=%7lld\n", Count_RIO-1, R_Req_Tbl[recon][Count_RIO-2].Finish_time, R_Req_Tbl[recon][Count_RIO-2].Arrive_time, R_Req_Tbl[recon][Count_RIO-2].Lasting_time);
+//			printf("Before calculating last request!\n");
+//			Print_Cluster_Time();
+
+			load_balancer_lbt[recon].push_back(Calculate_distance_lbt());
+			load_balancer_access[recon].push_back(Calculate_distance_access());
+		}
+
 
 		if(Last_RequestID != NULL)
 			free(Last_RequestID);
 		Last_RequestID = strdup(T_line->RequestID);
 
+		if(strcmp(T_line->Type, "read") == 0)
+		{
+			last_read = 1;
+		}
+		else
+		{
+			last_read = 0;
+		}
+
+		last_read_request_index = T_line->Request_index;
+
 	}
+
+
+
 
 	return 0;
 
@@ -1500,21 +1579,23 @@ void Process_ReadTrace(std::vector<struct Read_request> &Read_trace, std::vector
 }
 
 
-void Deal_last_request(int Count_RIO, int policy, int recon)
+void Deal_last_request(long long Count_RIO, int recon)
 {
+//	printf("Process Last Request!\n");
+	long long last_read_index = R_Req_Tbl[recon].size()-1;
 
 	if(recon == 1)
 	{
-		Schedule_request(Count_RIO, recon);
-	}
-	else
-	{
-		float G = Calculate_G_access_per_request(Count_RIO, recon, recon);
-		Cal_CDF(G);
+		if(R_Req_Tbl[recon][last_read_index].Finish_time == -1)
+		{
+			Schedule_request(last_read_index, recon);
+		}
 	}
 
-	Calculate_lasting_T_per_request(Count_RIO, recon);
+//	total_l += R_Req_Tbl[recon][Count_RIO-1].Lasting_time;
 
+//	printf("Request[%5lld]: L_time: %7lld-%7lld=%7lld\n", Count_RIO-1, R_Req_Tbl[recon][Count_RIO-1].Finish_time, R_Req_Tbl[recon][Count_RIO-1].Arrive_time, R_Req_Tbl[recon][Count_RIO-1].Lasting_time);
+//	Print_Cluster_Time();
 	load_balancer_lbt[recon].push_back(Calculate_distance_lbt());
 	load_balancer_access[recon].push_back(Calculate_distance_access());
 }
@@ -1581,11 +1662,10 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 	    {
 	    	total_line++;
 
-//	    	if(total_line == 148)
+//	    	if(total_line == 142)
 //	    	{
 //	    		printf("now [%lld]\n", total_line);
 //	    	}
-
 		    if (strcmp(buffer, "\n") == 0)
 		    {
 		        empty_line++;
@@ -1599,7 +1679,7 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 //				printf("--------------------------------line[%lld]: %s----------------------\n", total_line, T_line->Type);
 //				printf("line[%4lld]: A_time: %lld pos: %lld ReqID: %s Type:%s \n", total_line, T_line->Arrive_Time, T_line->pos, T_line->RequestID, T_line->Type);
 
-				if(Request(T_line, recon, recon) == -1)
+				if(Request(T_line, recon) == -1)
 					continue;
 
 				if(strcmp(T_line->Type, "write") == 0)
@@ -1610,6 +1690,7 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 						last_op = 1;
 					else if(last_op == 2)
 					{
+						printf("[OP]Read --> Write\n");
 //						Reset_time();
 						last_op = 1;
 					}
@@ -1630,7 +1711,7 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 					{
 						sys_last_busy_time += ENCODE_COST;
 
-			   			int s_p = Placement(soe,policy, recon);
+			   			int s_p = Placement(soe, policy, recon);
 			   			Finish_time_SOE(s_p, recon);
 			   			Reset_SOE(ec_k);
 
@@ -1643,6 +1724,7 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 					}
 					else if(last_op == 1)
 					{
+//						Print_Cluster_Time();
 //						Reset_time();
 						last_op = 2;
 //						printf("----------------------------Start Read Process!------------------------\n");
@@ -1670,7 +1752,7 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 					}
 					read_count++;
 //					Read_first_by_FP(T_line, policy, recon);
-					Read_by_lpblk(T_line, policy, recon);
+					Read_by_lpblk(T_line, recon);
 				}
 				else
 				{
@@ -1702,17 +1784,17 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 			Reset_SOE(ec_k);
 		}
 
-		Deal_last_request(R_Req_Tbl[recon].size(), policy, recon);
+		Deal_last_request((long long)R_Req_Tbl[recon].size(), recon);
 	}
 	
 
-	Print_Cluster_Time();
+//	Print_Cluster_Time();
 
 //	Print_stripe_tbl();
 //	Print_Blk_Mapping();
 
-	Generalize_ReadTrace_ALL(Read_trace, R_Req_Tbl[recon], READ);
-	Print_ReadTrace(Read_trace);
+//	Generalize_ReadTrace_ALL(Read_trace, R_Req_Tbl[recon], READ);
+//	Print_ReadTrace(Read_trace);
 
 //	Read_Table(Read_trace, 1);
 //	Print_ReadTrace(Read_trace);
@@ -1730,14 +1812,14 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 //		Process_ReadTrace(Read_trace, W_Req_Tbl[0], ALL_LONG, res, iteratimes);
 	    /*-------------------------------------------------------------------------------------------------------------------------------------------*/
 
-		if(policy == 0)
+		if(recon == 1)
 	    {
 		    printf("totalline: %lld || writecount: %lld || readcount: %lld || recon_read: %lld degraded_read: %lld \n", total_line, write_count, read_count, recon_stripe_count, degraded_read);
-		    printf("R/W [%4.3f] Read block time[Node busy]: %lld\n", (float) read_count / write_count, read_blk_num);
+		    printf("R/W [%4.3f] Abnormal %lld\n", (float) read_count / write_count, abnormal);
 	    }
 	}
 
-	Cal_total_statistics();
+	Cal_total_statistics(recon);
 
 	return res;
 

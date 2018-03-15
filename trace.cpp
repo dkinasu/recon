@@ -733,18 +733,17 @@ void Print_ReadTrace(std::vector<struct Read_request> &ReadTrace)
 	for (int i = 0; i < ReadTrace.size(); i++)
 	{
 
-//		if(ReadTrace[i].datablks.size() > ec_k)
+//		if(ReadTrace[i].Lasting_time < 0 )
 		{
-			printf("%-6lld %5lu %10lld", ReadTrace[i].R_Req_Index, ReadTrace[i].datablks.size(), ReadTrace[i].Lasting_time);
-	//		for(int j = 0; j < ReadTrace[i].datablks.size(); j++)
-	//		{
-	//			long long data = ReadTrace[i].datablks[j];
-	////			printf(" %2lld ", ReadTrace[i].datablks[j] % ec_node);
-	//			printf(" [%5lld: XX] ", data);
-	//		}
+			printf(" %-6lld %5lu %10lld %5.2f", ReadTrace[i].R_Req_Index, ReadTrace[i].datablks.size(), ReadTrace[i].Lasting_time, ReadTrace[i].G_value);
 
+//			for(int j = 0; j < ReadTrace[i].datablks.size(); j++)
+//			{
+//				long long data = ReadTrace[i].datablks[j];
+//	//			printf(" %2lld ", ReadTrace[i].datablks[j] % ec_node);
+//				printf(" [%5lld: XX] ", data);
+//			}
 
-			printf(" %20.2f ", ReadTrace[i].G_value);
 			printf("\n");
 		}
 	}
@@ -938,7 +937,6 @@ void Output_Result(int policy)
     fclose(R_out);
 
 }
-
 
 
 void Create_Default_Setting(char *** p)

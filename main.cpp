@@ -30,7 +30,7 @@ void Normalize(std::vector<struct Result> &Final)
 }
 
 
-void Output_Statictics(int trace_start, int trace_end, std::vector< std::vector<long long> >cdf, int degraded, int node_num, int k)
+void Output_Statictics(int trace_start, int trace_end, int degraded, int node_num, int k, int placement)
 {
 	char *suffix = (char *)".sts";
 
@@ -43,7 +43,14 @@ void Output_Statictics(int trace_start, int trace_end, std::vector< std::vector<
 	else
 		failure = (char *)"Degraded";
 
-	sprintf(R_output, "[%d, %d]%s%d%s%d%s%s%s", node_num, k, file_prefix, trace_start, "-", trace_end, suffix, "_", failure);
+	char *p_policy = NULL;
+	if(placement == 0)
+		p_policy = (char *)"BA";
+	else if (placement == 1)
+		p_policy = (char *)"RA";
+
+
+	sprintf(R_output, "[%d, %d]%s%d%s%d%s%s%s%s%s", node_num, k, file_prefix, trace_start, "-", trace_end, suffix, "_", failure, "_", p_policy);
 
 	FILE *R_out;
 
@@ -52,51 +59,89 @@ void Output_Statictics(int trace_start, int trace_end, std::vector< std::vector<
 
     char result_buf[4096];
 
-	sprintf(result_buf,"%-8s %-8s %-8s %-8s %-8s \n", "index", "lbt_base", "lbt_recon", "G_access-base", "G_access_recon");
+	sprintf(result_buf,"%-8s %10s %8s %8s %8s %8s %8s \n", "Index", "R_ID", "Size", "l_b", "l_r", "GA_b", "GA_r");
 	result_buf[strlen(result_buf)] = '\0';
 	fwrite(result_buf, 1, strlen(result_buf), R_out);
 
 
-    for(int i = 0; i < load_balancer_lbt[0].size(); i++)
+    for(int i = 0; i < R_Req_Tbl[0].size(); i++)
     {
-    	sprintf(result_buf,"%-8d %-8.3f %-8.3f %-8.3f %-8.3f \n", i, load_balancer_lbt[0][i], load_balancer_lbt[1][i], load_balancer_access[0][i], load_balancer_access[1][i]);
-    	result_buf[strlen(result_buf)] = '\0';
-    	fwrite(result_buf, 1, strlen(result_buf), R_out);
+//    	if(R_Req_Tbl[0][i].Lasting_time != R_Req_Tbl[1][i].Lasting_time)
+    	{
+    		sprintf(result_buf,"%-8d %10s %8lu %8lld %8lld %8.3f %8.3f\n", i, R_Req_Tbl[0][i].RequestID, R_Req_Tbl[0][i].datablks.size(), R_Req_Tbl[0][i].Lasting_time, R_Req_Tbl[1][i].Lasting_time, load_balancer_access[0][i], load_balancer_access[1][i]);
+    		result_buf[strlen(result_buf)] = '\0';
+    		fwrite(result_buf, 1, strlen(result_buf), R_out);
+    	}
     }
 
-    sprintf(result_buf,"\n");
+
+    sprintf(result_buf,"\n-------------------Printout total results!-----------------\n");
     result_buf[strlen(result_buf)] = '\0';
     fwrite(result_buf, 1, strlen(result_buf), R_out);
 
 
-    sprintf(result_buf, "Total_latency_read: %-8.3f %-8.3f\n",(float) total_latency[0]/total_latency[1],(float) 1);
+    sprintf(result_buf, "Total_latency_read :      %-8.3f %-8.3f\n",(float) total_latency[0]/total_latency[1],(float) 1);
     result_buf[strlen(result_buf)] = '\0';
     fwrite(result_buf, 1, strlen(result_buf), R_out);
 
-    sprintf(result_buf, "G_access_read:      %-8.3f %-8.3f\n", total_access[0], total_access[1]);
+    sprintf(result_buf, "Final_G_access_read:      %-8.3f %-8.3f\n", total_access[0], total_access[1]);
     result_buf[strlen(result_buf)] = '\0';
     fwrite(result_buf, 1, strlen(result_buf), R_out);
 
-    if(degraded == 0)
+
+    sprintf(result_buf,"\n-------------------CDF!-----------------\n");
+    result_buf[strlen(result_buf)] = '\0';
+    fwrite(result_buf, 1, strlen(result_buf), R_out);
+
+    for(int i = 0; i < cdf.size(); i++)
     {
+    	char * str;
 
-		sprintf(result_buf, "-------------Read_table[Printout]---------\n");
-		result_buf[strlen(result_buf)] = '\0';
-		fwrite(result_buf, 1, strlen(result_buf), R_out);
+    	if(i == 0)
+    	{
+    		str = (char *)"Baseline ";
+    	}
+    	else
+    		str = (char *)"EC       ";
 
-		sprintf(result_buf, "%-8s %-8s %-8s %-8s %-8s %-8s %-8s \n", "Index", "ID", "Read_size", "L_base", "L_recon", "G_base", "G_recon");
-		result_buf[strlen(result_buf)] = '\0';
-		fwrite(result_buf, 1, strlen(result_buf), R_out);
+        sprintf(result_buf,"%s: ", str);
+        result_buf[strlen(result_buf)] = '\0';
+        fwrite(result_buf, 1, strlen(result_buf), R_out);
 
-		for(int i = 0; i < R_Req_Tbl[0].size(); i++)
-		{
-			sprintf(result_buf,"%-8d %-8s %-8lu %-8lld %-8lld %-8.3f %-8.3f \n", i, R_Req_Tbl[0][i].RequestID, R_Req_Tbl[0][i].datablks.size(), R_Req_Tbl[0][i].Lasting_time, R_Req_Tbl[1][i].Lasting_time, R_Req_Tbl[0][i].G_value, R_Req_Tbl[1][i].G_value);
-			result_buf[strlen(result_buf)] = '\0';
-			fwrite(result_buf, 1, strlen(result_buf), R_out);
 
-		}
+    	for(int j = 0; j < cdf[i].size(); j++)
+    	{
+    		sprintf(result_buf, "%6.3f  ", (float)cdf[i][j]/cdf[i][cdf[i].size()-1]);
+    		result_buf[strlen(result_buf)] = '\0';
+    		fwrite(result_buf, 1, strlen(result_buf), R_out);
+    	}
+
+        sprintf(result_buf,"\n");
+        result_buf[strlen(result_buf)] = '\0';
+        fwrite(result_buf, 1, strlen(result_buf), R_out);
 
     }
+
+//    if(degraded == 0)
+//    {
+//
+//		sprintf(result_buf, "-------------Read_table[Printout]---------\n");
+//		result_buf[strlen(result_buf)] = '\0';
+//		fwrite(result_buf, 1, strlen(result_buf), R_out);
+//
+//		sprintf(result_buf, "%-8s %-8s %-8s %-8s %-8s %-8s %-8s \n", "Index", "ID", "Read_size", "L_base", "L_recon", "G_base", "G_recon");
+//		result_buf[strlen(result_buf)] = '\0';
+//		fwrite(result_buf, 1, strlen(result_buf), R_out);
+//
+//		for(int i = 0; i < R_Req_Tbl[0].size(); i++)
+//		{
+//			sprintf(result_buf,"%-8d %-8s %-8lu %-8lld %-8lld %-8.3f %-8.3f \n", i, R_Req_Tbl[0][i].RequestID, R_Req_Tbl[0][i].datablks.size(), R_Req_Tbl[0][i].Lasting_time, R_Req_Tbl[1][i].Lasting_time, R_Req_Tbl[0][i].G_value, R_Req_Tbl[1][i].G_value);
+//			result_buf[strlen(result_buf)] = '\0';
+//			fwrite(result_buf, 1, strlen(result_buf), R_out);
+//
+//		}
+//
+//    }
 //    if(degraded == 0)
 //    {
 //		sprintf(result_buf,"\n----------Read Profiling!--------------------\n");
@@ -196,45 +241,44 @@ void Output_Statictics(int trace_start, int trace_end, std::vector< std::vector<
 int main(int argc, char** argv) 
 {
 
-	trace = atoi(argv[10]);
-//	trace = 0;
+    trace = atoi(argv[8]);
 
-	if(trace == 0)//desktop  4& 5
-	{
-		file_prefix = (char *)"mobi.trace.";
-		cout << "Debug trace" << endl;
-	}
-	else if(trace == 1)//desktop  4& 5
-	{
-		file_prefix = (char *)"trace-desktop-ubuntu-";
-		file_suffix = (char *)".sha1";
-		cout << "Trace: Desktop[4| 5]" << endl;
-	}
-	else if(trace == 2)// hadoop 2,3,6 8-18,20,21
-	{
-		file_prefix = (char *)"hivetpch";
-		file_suffix = (char *)"-ubuntu.trace";
-		cout << "Trace: Hadoop [2,3,6 8-18,20,21]" << endl;
+    if(trace == 0)//desktop  4& 5
+    {
+    	file_prefix = (char *)"mobi.trace.";
+    	cout << "Debug trace" << endl;
+    }
+    else if(trace == 1)//desktop  4& 5
+    {
+    	file_prefix = (char *)"trace-desktop-ubuntu-";
+    	file_suffix = (char *)".sha1";
+    	cout << "Trace: Desktop[4| 5]" << endl;
+    }
+    else if(trace == 2)// hadoop 2,3,6 8-18,20,21
+    {
+    	file_prefix = (char *)"hivetpch";
+    	file_suffix = (char *)"-ubuntu.trace";
+    	cout << "Trace: Hadoop [2,3,6 8-18,20,21]" << endl;
 
-	}else if(trace == 3)//transaction  1 & 2
-	{
-		file_prefix = (char *)"tpcc-config";
-		file_suffix = (char *)".sha1";
-		cout << "Trace: Transaction [1 & 2]" << endl;
-	}
-	else
-	{
-		printf("Wrong trace!\n");
-		return 0;
-	}
+    }else if(trace == 3)//transaction  1 & 2
+    {
+    	file_prefix = (char *)"tpcc-config";
+    	file_suffix = (char *)".sha1";
+    	cout << "Trace: Transaction [1 & 2]" << endl;
+    }
+    else
+    {
+    	printf("Wrong trace!\n");
+    	return 0;
+    }
 
+//    char **default_setting;
+//    Create_Default_Setting(&default_setting);
+//    Argv_Parse(8, default_setting, file_prefix, file_suffix);
 
-    char **default_setting;
-    Create_Default_Setting(&default_setting);
-    Argv_Parse(8, default_setting, file_prefix, file_suffix);
+	if(Argv_Parse(argc, argv, file_prefix, file_suffix) == -1)
+		return -1;
 
-//	Argv_Parse(argc, argv, file_prefix, file_suffix);
-//	Policy = atoi(argv[6]);
 
     if(ec_node < NODE_NUM)
     {
@@ -245,7 +289,7 @@ int main(int argc, char** argv)
     
     struct Result t;
 
-    std::vector< std::vector<long long> >cdf;
+    cdf.resize(Scheduler_num);
     load_balancer_lbt.resize(Scheduler_num);
     load_balancer_access.resize(Scheduler_num);
 
@@ -258,6 +302,7 @@ int main(int argc, char** argv)
 
     	if(degraded == 0)
     	{
+    		cdf[i].resize(6);
     		t = Process(files, trace_start, trace_end, &T_line, ERASURE, P_Policy, 200, degraded, i);
     	}
     	else //Degraded
@@ -274,16 +319,13 @@ int main(int argc, char** argv)
     		t.value[RAW_TRACE] = G_sum / ec_node;
     	}
 
-
-    	cdf.push_back(CDF);
-    	Final.push_back(t);
     	Reset_all(ec_node, 0);
     	total_l = 0;
-//    	R_Req_Tbl.clear();
-//    	R_Req_Tbl.resize(1);
+    	last_read = -1;
+    	last_read_request_index = -1;
     }
 
-    Output_Statictics(trace_start, trace_end, cdf, degraded, ec_node, ec_k);
+    Output_Statictics(trace_start, trace_end, degraded, ec_node, ec_k, P_Policy);
 
     return 0;
 }

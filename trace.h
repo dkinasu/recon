@@ -177,6 +177,8 @@ extern struct Request CurReq;
 extern std::vector< std::vector<struct Request> >R_Req_Tbl;
 extern std::vector< std::vector<struct Request> >W_Req_Tbl;
 extern char *Last_RequestID;
+extern int last_read;
+extern long long last_read_request_index;
 
 void Init_CurRequest();
 void Clear_CurRequest();
@@ -197,6 +199,7 @@ void Output_Result(int policy);
 void Output_Data(int policy, int fiu);
 
 extern std::vector<long long>CDF;
+extern std::vector< std::vector<long long> >cdf;
 
 #endif /* TRACE_H */
 

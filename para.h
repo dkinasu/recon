@@ -36,6 +36,7 @@ int degraded = 0;
 int Scheduler_num = 0;
 
 std::vector<long long>CDF;
+std::vector< std::vector<long long> >cdf;
 
 std::vector< long long >R_trace_CDF;//Read_trace profiling
 std::vector< long long >W_trace_CDF;//Write_trace profiling
@@ -63,6 +64,8 @@ std::vector< vector<struct Request> >R_Req_Tbl;
 std::vector< vector<struct Request> >W_Req_Tbl;
 
 char *Last_RequestID;
+int last_read = -1;
+long long last_read_request_index = -1;
 
 long long Count_WIO = 0;
 long long Count_RIO = 0;
@@ -154,6 +157,7 @@ long long readline_not_by_fp = 0;
 
 long long tmp = 0;
 long long read_blk_num = 0;
+long long abnormal = 0;
 long long last_datablk_by_fp = -1;//record last found fp in read. -1 means starting.
 
 long long recon_stripe_count = 0;

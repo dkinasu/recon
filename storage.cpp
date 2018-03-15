@@ -2475,8 +2475,6 @@ void Reset_all(int node_num, int cache_size_N)
 	Reset_fp_store();
 
 	Reset_blk_maping();
-	CDF.clear();
-
 
 }
 
