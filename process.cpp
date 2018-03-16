@@ -412,7 +412,7 @@ void Cal_total_statistics(int recon)
 	G_access = 1 - (float)ave_access/max_access;
 
 //	printf("ave: %lld, max: %lld", ave_access, max_access);
-	total_access.push_back(G_access);
+	Final_G_access.push_back(G_access);
 
 	total_l = 0;
 	for(int i = 0; i < R_Req_Tbl[recon].size(); i++)
@@ -808,12 +808,12 @@ long long Degraded_read(long long pblk_num)
 
 	tmp.resize(ec_k);
 
-	printf("Helper p_block[Node]:  ");
-	for(int i = 0; i < tmp.size() ; i++)
-	{
-		printf(" %5lld [%2lld] ", tmp[i], tmp[i] % ec_node);
-	}
-	printf("\n");
+//	printf("Helper p_block[Node]:  ");
+//	for(int i = 0; i < tmp.size() ; i++)
+//	{
+//		printf(" %5lld [%2lld] ", tmp[i], tmp[i] % ec_node);
+//	}
+//	printf("\n");
 
 	for(int i = 0; i < tmp.size() ; i++)
 	{

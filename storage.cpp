@@ -2079,7 +2079,7 @@ void EC_Para(int node)
 		{
 			case 8 :
 			{
-				ec_k = 4;
+				ec_k = 6;
 				break;
 			}
 			case 9 :

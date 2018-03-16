@@ -948,11 +948,11 @@ void Create_Default_Setting(char *** p)
     (*p)[1] = (char *)"./caftl/";//CAFTL trace
 //    (*p)[1] = (char *)"./trace/fiu/homes/";//CAFTL trace
 
-    (*p)[2] = (char *)"2"; //start_num
-    (*p)[3] = (char *)"3"; //end_num
+    (*p)[2] = (char *)"1"; //start_num
+    (*p)[3] = (char *)"2"; //end_num
     (*p)[4] = (char *)"6"; //Node num
     (*p)[5] = (char *)"2"; //IO policy num
     (*p)[6] = (char *)"0"; //placement policy: 0:BA 1:RA
-    (*p)[7] = (char *)"0"; //Degraded
+    (*p)[7] = (char *)"1"; //Degraded
 
 }

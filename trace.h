@@ -85,7 +85,9 @@ extern std::vector< long long >W_trace_CDF;//Write_trace profiling
 extern std::vector< std::vector<float> >load_balancer_lbt;//load_balancer_vector;
 extern std::vector< std::vector<float> >load_balancer_access;
 extern std::vector< long long >total_latency;
-extern std::vector< float >total_access;
+extern std::vector< long long >degraded_latency;
+extern std::vector< float >degraded_G_access;
+extern std::vector< float >Final_G_access;
 //a struct for each line of trace
 struct traceline {
 

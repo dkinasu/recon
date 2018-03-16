@@ -44,7 +44,9 @@ std::vector< long long >W_trace_CDF;//Write_trace profiling
 std::vector< vector<float> >load_balancer_lbt;//load_balancer_vector;
 std::vector< vector<float> >load_balancer_access;//load_balancer_vector;
 std::vector< long long >total_latency;//total latency
-std::vector< float >total_access;//total latency
+std::vector< long long >degraded_latency;
+std::vector< float >degraded_G_access;
+std::vector< float >Final_G_access;
 
 struct traceline T_line;
 long long Last_address = 0;
