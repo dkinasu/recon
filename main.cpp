@@ -76,6 +76,45 @@ void Output_Statictics(int trace_start, int trace_end, int degraded, int node_nu
 		sprintf(result_buf, "Ave_G_access_read:  %-8.3f %-8.3f\n", degraded_G_access[0], degraded_G_access[1]);
 		result_buf[strlen(result_buf)] = '\0';
 		fwrite(result_buf, 1, strlen(result_buf), R_out);
+
+
+		sprintf(result_buf,"\n-------------------CDF!-----------------\n");
+		result_buf[strlen(result_buf)] = '\0';
+		fwrite(result_buf, 1, strlen(result_buf), R_out);
+
+		for(int i = 0; i < cdf.size(); i++)
+		{
+			char * str;
+
+			if(i == 0)
+			{
+				str = (char *)"Baseline ";
+			}
+			else
+				str = (char *)"EC       ";
+
+			sprintf(result_buf,"%s: ", str);
+			result_buf[strlen(result_buf)] = '\0';
+			fwrite(result_buf, 1, strlen(result_buf), R_out);
+
+
+			for(int j = 0; j < cdf[i].size(); j++)
+			{
+				sprintf(result_buf, "%6.3f  ", (float)cdf[i][j]/cdf[i][cdf[i].size()-1]);
+				result_buf[strlen(result_buf)] = '\0';
+				fwrite(result_buf, 1, strlen(result_buf), R_out);
+			}
+
+			sprintf(result_buf,"\n");
+			result_buf[strlen(result_buf)] = '\0';
+			fwrite(result_buf, 1, strlen(result_buf), R_out);
+
+		}
+
+
+
+
+
 	}
 	else
 	{
@@ -182,13 +221,12 @@ int main(int argc, char** argv)
     	return 0;
     }
 
-    char **default_setting;
-    Create_Default_Setting(&default_setting);
-    Argv_Parse(8, default_setting, file_prefix, file_suffix);
+//    char **default_setting;
+//    Create_Default_Setting(&default_setting);
+//    Argv_Parse(8, default_setting, file_prefix, file_suffix);
 
-//	if(Argv_Parse(argc, argv, file_prefix, file_suffix) == -1)
-//		return -1;
-
+	if(Argv_Parse(argc, argv, file_prefix, file_suffix) == -1)
+		return -1;
 
     if(ec_node < NODE_NUM)
     {
@@ -210,9 +248,12 @@ int main(int argc, char** argv)
     {
     	Init(ec_node, 0);
 
+    	cdf[i].resize(6, 0);
+    	//printf("size of cdf[%d]: %ld\n", i, cdf[i].size());
+
     	if(degraded == 0)
     	{
-    		cdf[i].resize(6);
+
     		Process(files, trace_start, trace_end, &T_line, ERASURE, P_Policy, 200, degraded, i);
 
     		Reset_all(ec_node, 0);
@@ -223,21 +264,31 @@ int main(int argc, char** argv)
     	else //Degraded
     	{
     		long long latency_sum = 0;
-    		long long G_sum = 0;
+    		double G_sum = 0;
 
     		for(int j = 0; j < ec_node; j++)
     		{
     			Process(files, trace_start, trace_end, &T_line, ERASURE, P_Policy, j, degraded, i);
+
+//        		printf("total_latency[%d]= %lld Final_G_access[%d] = %f\n", i, total_latency[i], i, Final_G_access[i]);
     			latency_sum += total_latency[i];
     			G_sum += Final_G_access[i];
 
     			Reset_all(ec_node, 0);
+
     			total_l = 0;
+
     			last_read = -1;
     			last_read_request_index = -1;
     			total_latency.clear();
     			Final_G_access.clear();
+
+    			R_Req_Tbl.clear();
+    			W_Req_Tbl.clear();
+    		    R_Req_Tbl.resize(Scheduler_num);
+    		    W_Req_Tbl.resize(Scheduler_num);
     		}
+
 
     		degraded_latency.push_back(latency_sum);
     		degraded_G_access.push_back((float)G_sum/ec_node);

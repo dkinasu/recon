@@ -1,23 +1,13 @@
 #!/bin/bash
 #  running simulators
 
-if [ $1 -eq -1 ]
-then
-	echo "Test changing Nodenum(8 10 12 14)" 
-	Nodenum=(8 10 12 14)
-	for n in ${Nodenum[@]}
-	do
-	echo "Node:"$n "Degraded:"$2 "trace:"$3 "Placement:"$4
-	#time ./1.sh $j 1 $p $1 $i $d	
-	done 
+
+if [ $# -lt 4 ]
+then 
+	echo "Usage: run.sh [node_num:12] [degraded 0|1|all:2] [trace:u1|h2|t3|all:4] [placement: BA0|RA1|all:2]"
 	exit
-else
-	if [ $# -lt 4 ]
-	then 
-		echo "Usage: run.sh [node_num:12] [degraded 0|1|all:2] [trace:u1|h2|t3|all:4] [placement: BA0|RA1|all:2]"
-		exit
-	fi
 fi
+
 
 echo "Node:"$1 "Degraded:"$2 "trace:"$3 "Placement:"$4
 

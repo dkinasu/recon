@@ -411,21 +411,29 @@ void Cal_total_statistics(int recon)
 
 	G_access = 1 - (float)ave_access/max_access;
 
-//	printf("ave: %lld, max: %lld", ave_access, max_access);
-	Final_G_access.push_back(G_access);
+//	printf("ave: %lld, max: %lld\n", ave_access, max_access);
+	Final_G_access[recon] = (G_access);
+
+	if(recon == 1)
+	{
+		;
+	}
 
 	total_l = 0;
 	for(int i = 0; i < R_Req_Tbl[recon].size(); i++)
 	{
 		total_l += R_Req_Tbl[recon][i].Lasting_time;
+
 		Cal_CDF(R_Req_Tbl[recon][i].G_value, recon);
 	}
 
-	total_latency.push_back(total_l);
+	total_latency[recon]=total_l;
 }
 
 void Cal_CDF(float& value, int recon)
 {
+//	printf("size of: %ld\n", cdf[recon].size());
+
 	cdf[recon][5]++; //100%
 
 	//CDF
@@ -743,7 +751,6 @@ void Read_by_lpblk(struct traceline *T_line, int recon)
 //			queue = (Cluster[CurNode]->read_access - 1) % QUEUE_NUM;
 //			printf("ACCESS Node[%3d]: %5lld --> ", CurNode, Cluster[CurNode]->Last_Busy_Time);
 
-
 			if (sys_last_busy_time > Cluster[CurNode]->Last_Busy_Time)
 			{
 				Cluster[CurNode]->Last_Busy_Time = sys_last_busy_time + READ_LATENCY + DATA_TRANSMISSION;
@@ -796,7 +803,10 @@ long long Degraded_read(long long pblk_num)
 
 	for(int i = 0; i < stripe_tbl[stripe_num].data.size() ; i++)
 	{
-		tmp.push_back(stripe_tbl[stripe_num].data[i]);
+		long long p = stripe_tbl[stripe_num].data[i];
+		int failed_node = global_storage[p]->node_num;
+		if(Cluster[failed_node]->failed != 1)
+			tmp.push_back(stripe_tbl[stripe_num].data[i]);
 	}
 
 	for(int i = 0; i < stripe_tbl[stripe_num].parity.size() ; i++)
@@ -827,7 +837,6 @@ long long Degraded_read(long long pblk_num)
 			Cluster[Cur_node]->read_access++;
 			Cluster[Cur_node]->degrade_access++;
 
-			queue = (Cluster[CurNode]->read_access - 1) % QUEUE_NUM;
 //			printf("ACCESS Node[%d]: %5lld --> ", Cur_node, Cluster[Cur_node]->Last_Busy_Time);
 
 			if (sys_last_busy_time > Cluster[Cur_node]->Last_Busy_Time)
@@ -842,7 +851,6 @@ long long Degraded_read(long long pblk_num)
 			}
 
 //			printf("%5lld\n", Cluster[Cur_node]->Last_Busy_Time);
-			//sys_last_busy_time = Cluster[CurNode]->Last_Busy_Time + ACCESS_CACHE + SHA1_COST; // the metadata needs to get the read data and compute the sha1 and write into cache.
 
 			if(last_finish_time < Cluster[Cur_node]->Last_Busy_Time + ACK_TIME)
 			{
@@ -851,6 +859,7 @@ long long Degraded_read(long long pblk_num)
 		}
 		else //Degraded read
 		{
+			printf("[Data: %5lld] Access [blk: %5lld] in Node[%2d]: Failure!\n", blk_mapping[tmp[i]], tmp[i], Cur_node);
 			last_finish_time = Degraded_read(tmp[i]);
 		}
 
@@ -984,10 +993,6 @@ void Print_multimap(multimap<long long, int> &A)
 long long Schedule_request(long long Count_RIO, int policy)
 {
 //	printf("test!\n");
-//	if(Count_RIO == 270)
-//	{
-//		printf("Error![index out of bountry]   %lld\n", Count_RIO);
-//	}
 
 	long long finish_time = -1;
 
@@ -996,10 +1001,10 @@ long long Schedule_request(long long Count_RIO, int policy)
 	map <long long, long long >::iterator li;
 	map <long long, vector<long long> >::iterator si;
 
-	if(total_line == 6175)
-	{
-		printf("Stop here!\n");
-	}
+//	if(total_line == 6175)
+//	{
+//		printf("Stop here!\n");
+//	}
 
 
 
@@ -1058,7 +1063,7 @@ long long Schedule_request(long long Count_RIO, int policy)
 	set<int> free_nodes;
 	set<int> H_nodes;
 
-//	printf("Reschedule    : ");
+	//printf("Reschedule    : ");
 	//process first and last stripe
 	for(si = S.begin(); si != S.end(); si++)
 	{
@@ -1074,20 +1079,23 @@ long long Schedule_request(long long Count_RIO, int policy)
 				long long arrive_time = R_Req_Tbl[policy][Count_RIO].arrive_times[S[si->first][j]];//for non-reschedule ones, it should be the same.
 //				long long arrive_time = Latest_Arrive_T_per_S[datablk/ec_k];
 
-//				printf(" [%5lld: %lld ", datablk, arrive_time);
+				if(sys_last_busy_time < arrive_time)
+				{
+					sys_last_busy_time = arrive_time;
+				}
+
 				//process the request with normal read
 				if(Cluster[node_num]->failed != 1 && global_storage[pblk_num]->corrupted != 1)
 				{
-					//Print_Cluster_Time();
+//					Print_Cluster_Time();
 //					printf("  ] ");
 					Cluster[node_num]->total_access_count++;
 					Cluster[node_num]->read_access++;
 					recon_G[node_num]++;
 
-					if(sys_last_busy_time < arrive_time)
-					{
-						sys_last_busy_time = arrive_time;
-					}
+
+
+//					printf("Data: %5lld A_T: %lld ACCESS Node[%3d]: %5lld --> ", datablk, arrive_time , node_num, Cluster[node_num]->Last_Busy_Time);
 
 					if (sys_last_busy_time > Cluster[node_num]->Last_Busy_Time)
 					{
@@ -1102,13 +1110,14 @@ long long Schedule_request(long long Count_RIO, int policy)
 
 					t = Cluster[node_num]->Last_Busy_Time;
 
+//					printf("%5lld\n", Cluster[node_num]->Last_Busy_Time);
 
 					//Print_Cluster_Time();
 				}
 				else//degraded read
 				{
 //					printf(" X] ");
-					//printf("Access [blk: %5lld] in Node[%2d]: Failure!\n", pblk_num, CurNode);
+//					printf("[Data: %5lld] Access [blk: %5lld] in Node[%2d]: Failure!\n", datablk, pblk_num, node_num);
 					t = Degraded_read(pblk_num);
 				}
 
@@ -1170,6 +1179,12 @@ long long Schedule_request(long long Count_RIO, int policy)
 
 			//	printf(" [N:%5d: %lld ", chosen_node, arrive_time);
 
+				if(sys_last_busy_time < arrive_time)
+				{
+					sys_last_busy_time = arrive_time;
+				}
+
+
 				if(Cluster[chosen_node]->failed != 1 && global_storage[pblk_num]->corrupted != 1)
 				{
 			//		printf("  ] ");
@@ -1178,10 +1193,7 @@ long long Schedule_request(long long Count_RIO, int policy)
 					Cluster[chosen_node]->read_access++;
 					recon_G[chosen_node]++;
 
-					if(sys_last_busy_time < arrive_time)
-					{
-						sys_last_busy_time = arrive_time;
-					}
+
 
 					if (sys_last_busy_time > Cluster[chosen_node]->Last_Busy_Time)
 					{
@@ -1274,6 +1286,8 @@ long long Schedule_request(long long Count_RIO, int policy)
 //			}
 //
 //			printf("\n");
+//
+//			Print_Cluster_Time();
 
 			break;
 
@@ -1594,10 +1608,12 @@ void Deal_last_request(long long Count_RIO, int recon)
 
 //	total_l += R_Req_Tbl[recon][Count_RIO-1].Lasting_time;
 
-//	printf("Request[%5lld]: L_time: %7lld-%7lld=%7lld\n", Count_RIO-1, R_Req_Tbl[recon][Count_RIO-1].Finish_time, R_Req_Tbl[recon][Count_RIO-1].Arrive_time, R_Req_Tbl[recon][Count_RIO-1].Lasting_time);
+
 //	Print_Cluster_Time();
 	load_balancer_lbt[recon].push_back(Calculate_distance_lbt());
 	load_balancer_access[recon].push_back(Calculate_distance_access());
+
+//	printf("Request[%5lld]: L_time: %7lld-%7lld=%7lld\n", Count_RIO-1, R_Req_Tbl[recon][Count_RIO-1].Finish_time, R_Req_Tbl[recon][Count_RIO-1].Arrive_time, R_Req_Tbl[recon][Count_RIO-1].Lasting_time);
 }
 
 struct Result Process(char **files, int trace_start, int trace_end, struct traceline *T_line, int ec, int policy, int iteratimes, int degraded, int recon)
@@ -1628,19 +1644,19 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 	    	res.p_name = (char *)"Wrong Policy";
 	}
 
-	if(degraded == 0)
-	{
-		if(recon == 1)
-		{
-			printf("-----------------[%-10s]   using Recon!-------------------\n", res.p_name);
-		}
-
-		else
-		{
-			printf("-----------------[%-10s]   using Normal!-------------------\n", res.p_name);
-
-		}
-	}
+//	if(degraded == 0)
+//	{
+//		if(recon == 1)
+//		{
+//			printf("-----------------[%-10s]   using Recon!-------------------\n", res.p_name);
+//		}
+//
+//		else
+//		{
+//			printf("-----------------[%-10s]   using Normal!-------------------\n", res.p_name);
+//
+//		}
+//	}
 
 	char buffer[MAX_PATH_SIZE + MAX_META_SIZE];
 
@@ -1676,7 +1692,6 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 		    {
 		    	effective_line_count++;
 
-//				printf("--------------------------------line[%lld]: %s----------------------\n", total_line, T_line->Type);
 //				printf("line[%4lld]: A_time: %lld pos: %lld ReqID: %s Type:%s \n", total_line, T_line->Arrive_Time, T_line->pos, T_line->RequestID, T_line->Type);
 
 				if(Request(T_line, recon) == -1)
@@ -1735,6 +1750,7 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 						{
 							Recover_Cluster();
 							Cluster[iteratimes]->failed = 1;
+//							printf("Node[%2d] Failed!\n", iteratimes);
 						}
 
 					}
@@ -1793,8 +1809,11 @@ struct Result Process(char **files, int trace_start, int trace_end, struct trace
 //	Print_stripe_tbl();
 //	Print_Blk_Mapping();
 
-//	Generalize_ReadTrace_ALL(Read_trace, R_Req_Tbl[recon], READ);
-//	Print_ReadTrace(Read_trace);
+//	if(recon == 1)
+//	{
+//		Generalize_ReadTrace_ALL(Read_trace, R_Req_Tbl[recon], READ);
+//		Print_ReadTrace(Read_trace);
+//	}
 
 //	Read_Table(Read_trace, 1);
 //	Print_ReadTrace(Read_trace);
